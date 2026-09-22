@@ -2,7 +2,37 @@
 ข้อมูลผู้เสียชีวิตจากอุบัติเหตุทางถนน จากระบบบูรณาการข้อมูลการตายจากอุบัติเหตุทางถนน
 
 จากชุดข้อมูลทั้งหมด 3 ชุด ตั้งแต่ ปี 2566 - 2568
+Data Dictionary 
 
+## Data Dictionary (คำอธิบายตัวแปร)
+
+| ชื่อตัวแปร | ประเภท | คำอธิบาย |
+| :--- | :---: | :--- |
+| `id` | int | |
+| `DEAD_YEAR(Budha)` | varchar | ปีที่เสียชีวิต (พ.ศ.) |
+| `DEAD_YEAR` | varchar | ปีที่เสียชีวิตของผู้ประสบเหตุ |
+| `Age` | varchar | อายุผู้เสียชีวิต |
+| `Sex` | varchar | เพศผู้เสียชีวิต |
+| `BirthYear` | varchar | level1 เปิดเผยเฉพาะปีเกิด |
+| `NationalityId` | varchar | สัญชาติผู้เสียชีวิต (มรณบัตร) |
+| `Tumbol` | varchar | ที่อยู่ตำบล |
+| `District` | varchar | ที่อยู่อำเภอ |
+| `Province` | varchar | ที่อยู่จังหวัด |
+| `RiskHelmet` | varchar | หมวกนิรภัย |
+| `RiskSafetyBelt` | varchar | การคาดเข็มขัดนิรภัยของผู้เสียชีวิต |
+| `DeadDate` | varchar | วันที่เสียชีวิต (ข้อมูลจากมรณบัตร) |
+| `DateRec` | varchar | วันที่เกิดเหตุ (E-claim) |
+| `TimeRec` | varchar | เวลาเกิดเหตุ (E-claim) |
+| `AccSubDist` | varchar | ตำบลเกิดเหตุ (E-claim) |
+| `AccDist` | varchar | อำเภอเกิดเหตุ (E-claim) |
+| `AccProv` | varchar | จังหวัดเกิดเหตุ (E-claim) |
+| `AccLat` | varchar | พิกัด Latitude ของจุดที่เกิดเหตุ (E-claim) |
+| `AccLong` | varchar | พิกัด Longitude ของจุดที่เกิดเหตุ (E-claim) |
+| `ICD-10` | varchar | รหัส ICD-10 ตัว อักษร V ตามด้วยตัวเลข 3 หลัก |
+| `Vehicle` | varchar | พาหนะที่ประสบเหตุตามรหัส ICD-10 |
+| `created_at` | timestamp | วันที่สร้าง record |
+| `verify_date` | varchar | วันที่ตรวจสอบข้อมูล |
+| `created_by` | varchar | ผู้นำเข้าข้อมูล (เป็นตัวย่อภาษาอังกฤษ 2 หลัก) |
 
 
 1. การวิเคราะห์มิติเวลาและพฤติกรรม (Temporal & Behavioral Patterns)
