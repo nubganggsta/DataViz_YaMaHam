@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1420">
+  <title>Thailand Road Fatality Atlas</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.4/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.4/dist/MarkerCluster.Default.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="rail">
+      <div class="brand-mark">R<span>×</span></div>
+      <a class="rail-link active" href="#overview" title="ภาพรวม">◫</a>
+      <a class="rail-link" href="#time" title="เวลาและเทศกาล">◷</a>
+      <a class="rail-link" href="#people" title="ประชากร">◉</a>
+      <a class="rail-link" href="#roads" title="แผนที่ถนน">⌖</a>
+      <div class="rail-bottom">TH<br><span>2566–68</span></div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow"><span class="live-dot"></span> ROAD SAFETY INTELLIGENCE</div>
+          <h1>ผู้เสียชีวิตจากอุบัติเหตุทางถนน</h1>
+          <p class="subtitle">ภาพรวมข้อมูลประเทศไทย · พ.ศ. 2566–2568</p>
+        </div>
+        <div class="top-actions">
+          <label class="filter-label" for="year-filter">ปีที่เสียชีวิต</label>
+          <select id="year-filter" aria-label="กรองตามปีที่เสียชีวิต">
+            <option value="all">ทุกปี</option>
+            <option value="2023">2566</option>
+            <option value="2024">2567</option>
+            <option value="2025">2568</option>
+          </select>
+          <button class="small-btn" id="theme-toggle" type="button" aria-label="สลับธีมสี">☾ โหมดมืด</button>
+          <button class="export-btn" id="export-csv">↓ <span>ส่งออก CSV</span></button>
+        </div>
+      </header>
+
+      <section class="data-note" id="data-note">
+        <div class="note-icon">!</div>
+        <div><strong>ข้อจำกัดข้อมูลวันเกิดเหตุ</strong><p>ฟิลด์ Date Rec และ Time Rec ว่างทั้งหมด จึงไม่สามารถระบุวันเกิดเหตุ วันในสัปดาห์ เวลาเกิดเหตุ หรือจับคู่เทศกาลกับวันเกิดเหตุได้ กราฟวันที่ด้านล่างใช้วันเสียชีวิต (Dead_Date) และระบุแยกชัดเจน</p></div>
+        <span class="note-count" id="incident-coverage">0% ครอบคลุม</span>
+      </section>
+
+      <section class="kpi-grid" id="overview">
+        <article class="kpi-card accent-coral"><div class="kpi-label">ผู้เสียชีวิตในข้อมูล</div><div class="kpi-value" id="kpi-deaths">—</div><div class="kpi-foot">พ.ศ. 2566–2568</div><div class="kpi-icon">✳</div></article>
+        <article class="kpi-card accent-blue"><div class="kpi-label">มีพิกัดจุดเกิดเหตุ</div><div class="kpi-value" id="kpi-coords">—</div><div class="kpi-foot" id="kpi-coords-sub">—</div><div class="kpi-icon">⌖</div></article>
+        <article class="kpi-card accent-green"><div class="kpi-label">จับคู่เส้นทาง DOH</div><div class="kpi-value" id="kpi-road-match">—</div><div class="kpi-foot">จุดห่างแนวถนนไม่เกิน 100 ม.</div><div class="kpi-icon">↗</div></article>
+        <article class="kpi-card accent-violet"><div class="kpi-label">ระบุวันเกิดเหตุได้</div><div class="kpi-value" id="kpi-incident">—</div><div class="kpi-foot">ใช้ Date Rec เท่านั้น · ไม่แทนด้วยวันเสียชีวิต</div><div class="kpi-icon">◷</div></article>
+      </section>
+
+      <section class="section-heading" id="time"><div><div class="eyebrow">01 / TEMPORAL SIGNALS</div><h2>เวลาและเทศกาล</h2></div><span class="section-meta">วันเกิดเหตุเป็นฐานวิเคราะห์เมื่อมีข้อมูล</span></section>
+      <section class="two-col temporal-grid">
+        <article class="panel chart-panel">
+          <div class="panel-head"><div><h3>แนวโน้มการเสียชีวิตรายเดือน</h3><p>จัดกลุ่มตาม Dead_Date · วันที่เสียชีวิต</p></div><span class="tag tag-muted">ไม่ใช่วันเกิดเหตุ</span></div>
+          <div class="chart-area"><canvas id="trend-chart" aria-label="กราฟแนวโน้มการเสียชีวิตรายเดือน"></canvas></div>
+          <div class="legend-row" id="trend-legend"></div>
+        </article>
+        <article class="panel unavailable-panel">
+          <div class="panel-head"><div><h3>ช่วงวันและเวลาที่เกิดเหตุ</h3><p>วันในสัปดาห์ × ชั่วโมงเกิดเหตุ</p></div><span class="tag tag-warn">ข้อมูลไม่พร้อม</span></div>
+          <div class="empty-state"><div class="empty-clock">◷</div><strong>ยังสร้าง Heatmap วัน–เวลาไม่ได้</strong><p>ไม่มีค่า Date Rec และ Time Rec ในระเบียน จึงยังระบุช่วงเวลาอันตรายจากวันเกิดเหตุไม่ได้</p></div>
+        </article>
+        <article class="panel unavailable-panel festival-panel">
+          <div class="panel-head"><div><h3>เทศกาลและ 7 วันอันตราย</h3><p>เปรียบเทียบวันเทศกาลกับวันปกติ</p></div><span class="tag tag-warn">รอวันเกิดเหตุ</span></div>
+          <div class="festival-status"><div class="festival-icon">✳</div><div><strong id="holiday-matches">ยังจับคู่ไม่ได้</strong><p>ปฏิทินวันหยุดเตรียมพร้อมแล้ว แต่จะ join กับ Date Rec เท่านั้น เมื่อข้อมูลวันเกิดเหตุมีค่า</p></div></div>
+          <div class="festival-rule"><span class="rule-dot"></span>ไม่ใช้ Dead_Date แทนวันเกิดเหตุในการนับเทศกาล</div>
+        </article>
+      </section>
+
+      <section class="section-heading" id="people"><div><div class="eyebrow">02 / PEOPLE & VEHICLES</div><h2>ใครได้รับผลกระทบ</h2></div><span class="section-meta">จำนวนผู้เสียชีวิต ไม่ใช่อัตราความเสี่ยง</span></section>
+      <section class="two-col profile-grid">
+        <article class="panel chart-panel">
+          <div class="panel-head"><div><h3>โครงสร้างอายุและเพศ</h3><p>Butterfly chart · อายุผู้เสียชีวิต</p></div><div class="legend-inline"><span><i class="swatch swatch-f"></i>หญิง</span><span><i class="swatch swatch-m"></i>ชาย</span></div></div>
+          <div class="chart-area pyramid-area"><canvas id="pyramid-chart" aria-label="กราฟประชากรอายุและเพศ"></canvas></div>
+        </article>
+        <article class="panel chart-panel">
+          <div class="panel-head"><div><h3>พาหนะของผู้เสียชีวิต</h3><p>กลุ่มพาหนะตามข้อมูลต้นทาง</p></div></div>
+          <div class="chart-area tall-chart"><canvas id="vehicle-chart" aria-label="กราฟพาหนะ"></canvas></div>
+        </article>
+        <article class="panel chart-panel">
+          <div class="panel-head"><div><h3>พาหนะ × อักษรนำหน้า ICD‑10</h3><p>Grouped bars · นับระเบียนตามประเภทพาหนะและตัวอักษรรหัส</p></div></div>
+          <div class="chart-area tall-chart"><canvas id="vehicle-cause-chart" aria-label="กราฟพาหนะจำแนกตามอักษรนำหน้ารหัส ICD-10"></canvas></div><div class="legend-row" id="crash-legend"></div>
+        </article>
+        <article class="panel chart-panel">
+          <div class="panel-head"><div><h3>รหัสสาเหตุการเสียชีวิต</h3><p>Cause_Code · กลุ่มรหัส ICD-10 ที่พบบ่อย</p></div></div>
+          <div class="chart-area tall-chart"><canvas id="cause-chart" aria-label="กราฟรหัสสาเหตุ"></canvas></div>
+        </article>
+        <article class="panel unavailable-panel safety-panel">
+          <div class="panel-head"><div><h3>อุปกรณ์นิรภัย</h3><p>หมวกนิรภัยและเข็มขัดนิรภัย</p></div><span class="tag tag-warn">ไม่มีข้อมูล</span></div>
+          <div class="empty-state compact-empty"><div class="empty-shield">◇</div><strong>ประเมินการใช้อุปกรณ์ไม่ได้</strong><p>Risk_Helmet และ Risk_Safety_Belt ว่างทั้งหมด จึงไม่แสดงเป็น “ไม่ใช้อุปกรณ์” เพื่อหลีกเลี่ยงการสรุปผิด</p></div>
+        </article>
+      </section>
+
+      <section class="section-heading" id="roads"><div><div class="eyebrow">03 / SPATIAL ANALYSIS</div><h2>ตำแหน่งเหตุและโครงข่ายทางหลวง</h2></div><span class="section-meta">DOH · พิกัด WGS 84 · จับคู่ใกล้สุด ≤ 100 ม.</span></section>
+      <section class="panel map-panel">
+        <div class="panel-head map-head"><div><h3>แผนที่พิกัดผู้เสียชีวิตบนแนวถนน</h3><p>ใช้พิกัดที่ตรวจแก้แล้ว · เส้นทางใช้เพื่อบริบทและตรวจสอบตำแหน่ง</p></div><div class="map-controls"><label for="road-type-filter">ชั้นทาง</label><select id="road-type-filter" aria-label="กรองชั้นถนน"><option value="all">ทุกชั้นที่มี</option><option value="primary">ทางหลวงเลข 1 หลัก</option><option value="secondary">ทางหลวงเลข 2–4 หลัก</option></select><label class="province-unavailable" title="ชุดข้อมูลไม่มีจังหวัดเกิดเหตุ">จังหวัดเกิดเหตุ: ไม่มีฟิลด์</label><label><input type="checkbox" id="show-roads" checked> แสดงเส้นถนน</label><label><input type="checkbox" id="show-points" checked> แสดงจุดข้อมูล</label><button class="small-btn" id="map-reset">จัดมุมมองใหม่</button></div></div>
+        <div class="map-wrap"><div id="road-map" role="application" aria-label="แผนที่ Leaflet พิกัดและเส้นถนน"></div><div class="map-empty" id="map-empty" hidden>ไม่มีจุดที่มีพิกัดในตัวกรองนี้</div><div class="map-legend"><span><i class="map-dot"></i>จุดเหตุการณ์ (จัดกลุ่ม)</span><span><i class="density-line low"></i>1–3</span><span><i class="density-line mid"></i>4–9</span><span><i class="density-line high"></i>10+ ราย</span><span id="map-match-label">— จับคู่ได้</span></div></div>
+        <div class="map-footer"><span id="map-summary">กำลังโหลดข้อมูลแผนที่…</span><span>แผนที่พื้นหลัง © OpenStreetMap · ลากเพื่อเลื่อนและซูมได้</span></div>
+      </section>
+
+      <section class="panel hotspots-panel"><div class="panel-head"><div><h3>ช่วงทางที่มีผู้เสียชีวิตจับคู่ได้มาก</h3><p>จำนวนดิบจากพิกัดที่จับคู่แนวทางหลวง DOH ได้ภายใน 100 เมตร · ใช้เป็นจุดตรวจสอบ ไม่ใช่อัตราความเสี่ยง</p></div><span class="tag tag-muted">จัดอันดับตามตัวกรอง</span></div><div class="hotspots-list" id="hotspots-list"></div></section>
+
+      <section class="bottom-grid">
+        <article class="panel insight-panel"><div class="eyebrow">DATA QUALITY</div><h3>อ่านผลอย่างระมัดระวัง</h3><ul id="quality-list"></ul></article>
+        <article class="panel insight-panel"><div class="eyebrow">ROAD CONTEXT</div><h3>ปริมาณจราจร</h3><div class="traffic-kpi"><strong id="traffic-linked">—</strong><span>ระเบียนมี AADT ที่จับคู่ได้</span></div><p>ค่า AADT เป็นปริมาณจราจรของเส้นทางที่พบรหัสตรงกัน ใช้เป็นบริบทเท่านั้น ไม่ใช่อัตราเสี่ยงต่อการเดินทาง และอาจเฉลี่ยหลายปีเมื่อไม่มีปีเกิดเหตุ</p></article>
+      </section>
+      <footer class="footer"><span>ข้อมูลต้นทาง: RTDDI · DOH Road Cl Line 2568 · สถิติปริมาณจราจร · ปฏิทินวันหยุด</span><span>Dashboard วิเคราะห์เชิงพรรณนา</span></footer>
+    </main>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.4/dist/leaflet.markercluster.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
