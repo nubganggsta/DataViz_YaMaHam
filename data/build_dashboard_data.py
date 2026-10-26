@@ -186,20 +186,24 @@ def main() -> None:
     deaths["incident_date"] = deaths[date_col].map(parse_death_date)
     deaths["incident_time"] = deaths[time_col].where(deaths[time_col].notna(), None)
     deaths["death_date"] = deaths["Dead_Date"].map(parse_death_date)
-    deaths["holiday_name"] = deaths["incident_date"].map(holiday_map)
-    deaths["is_special_holiday"] = deaths["incident_date"].map(lambda x: None if x is None else x in holiday_map)
+    # Match the supplied calendar directly against Dead_Date as requested.
+    # This means the result describes deaths registered on a holiday date,
+    # not necessarily crashes that occurred on that date.
+    deaths["holiday_name"] = deaths["death_date"].map(holiday_map)
+    deaths["is_special_holiday"] = deaths["death_date"].map(lambda x: None if x is None else x in holiday_map)
     deaths["incident_weekday_th"] = deaths["incident_date"].map(
         lambda x: WEEKDAYS_TH[datetime.fromisoformat(x).weekday()] if x else None
     )
 
-    # National holiday windows are based on the source holiday table, not death dates.
+    # Festival labels reflect exact calendar dates with matching holiday names.
+    # Seven-day danger windows are not inferred from isolated public holidays.
     festival_map = {}
     for day, name in holiday_map.items():
         if "สงกรานต์" in name:
             festival_map[day] = "สงกรานต์"
         elif "ขึ้นปีใหม่" in name or "ปีใหม่" in name:
             festival_map[day] = "ปีใหม่"
-    deaths["festival"] = deaths["incident_date"].map(festival_map)
+    deaths["festival"] = deaths["death_date"].map(festival_map)
 
     # Load detailed DOH road line records and their RTree bounding boxes.
     road_conn = sqlite3.connect(f"file:{ROADS_GPKG.as_posix()}?mode=ro", uri=True)
@@ -308,6 +312,8 @@ def main() -> None:
                 value = None
             elif out_key in {"latitude", "longitude", "age", "road_distance_m", "traffic_aadt"}:
                 value = safe_float(value)
+            elif out_key == "road_feature_id":
+                value = int(value)
             elif out_key == "traffic_years":
                 value = int(value)
             else:
@@ -344,7 +350,7 @@ def main() -> None:
         "coordinate_tolerance_m": MAX_MATCH_METERS,
         "roads": len(road_features),
         "traffic_road_codes_matched": int(traffic_summary.index.isin({traffic_code(x) for x in joined["highway_code"].dropna()}).sum()),
-        "warning": "เทศกาลและวัน/เวลาเกิดเหตุใช้ Date Rec และ Time Rec เท่านั้น; วันที่เกิดเหตุในไฟล์ต้นทางว่างทั้งหมด จึงไม่แทนด้วยวันที่เสียชีวิต",
+        "warning": "ปฏิทินวันหยุดจับคู่กับ Dead_Date ตามคำขอ ผลหมายถึงวันเสียชีวิตตรงกับวันปฏิทิน ไม่ยืนยันวันเกิดเหตุ; Date Rec และ Time Rec ว่างทั้งหมด และไม่ได้อนุมานช่วง 7 วันอันตรายจากวันหยุดรายวัน",
     }
     with OUT_JSON.open("w", encoding="utf-8") as f:
         json.dump({"meta": meta, "records": records, "roads": road_features}, f, ensure_ascii=False, separators=(",", ":"))

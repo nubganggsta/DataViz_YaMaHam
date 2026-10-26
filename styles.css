@@ -5,23 +5,34 @@
 @media(max-width:720px){.rail{width:52px}.main-content{padding:24px 14px 24px 66px}.topbar{align-items:flex-start;flex-direction:column}.topbar h1{font-size:22px}.top-actions{width:100%;flex-wrap:wrap}.top-actions select{flex:1}.two-col,.bottom-grid{grid-template-columns:1fr}.festival-panel{grid-column:auto}.kpi-grid{gap:9px}.kpi-card{padding:14px;min-height:110px}.kpi-value{font-size:24px}.kpi-foot{max-width:160px;line-height:1.4}.data-note{flex-wrap:wrap}.note-count{margin-left:38px}.section-heading{align-items:flex-start;flex-direction:column;gap:6px}.section-meta{text-align:left;max-width:100%}.panel{padding:15px}.map-wrap{height:360px}.map-controls{gap:8px}.map-footer{flex-direction:column;gap:5px}.footer{gap:12px;flex-direction:column}}
 
 /* Dark theme and road-density summary */
-body[data-theme="dark"]{--bg:#101821;--paper:#182330;--ink:#e6edf5;--muted:#9baabd;--line:#2a3949;--shadow:0 10px 32px rgba(0,0,0,.18);color-scheme:dark}
+body[data-theme="dark"]{--bg:#101a35;--paper:#22394f;--ink:#f3f6fb;--muted:#b1bed0;--line:#344d65;--shadow:0 10px 32px rgba(0,0,0,.22);color-scheme:dark}
 body[data-theme="dark"] .top-actions select,body[data-theme="dark"] .small-btn{background:#202d3b;color:var(--ink);border-color:#354658}
 body[data-theme="dark"] .data-note{background:#302b20;border-color:#64522e;color:#f0dba8}
 body[data-theme="dark"] .data-note p{color:#d4c49b}
-body[data-theme="dark"] .map-wrap{background:#121d27;border-color:#2b3948}
-body[data-theme="dark"] .map-legend{background:#1b2835ed;border-color:#354454;color:#c1ccda}
+body[data-theme="dark"] .map-wrap{background:#14253a;border-color:#344d65}
+body[data-theme="dark"] .map-legend{background:#1b3047ed;border-color:#405a72;color:#d1dbe8}
 body[data-theme="dark"] .empty-state{border-color:#334252;color:#bac5d2}
-body[data-theme="dark"] .empty-clock{background:#202d3a;color:#94a4b6}
-body[data-theme="dark"] .tag-muted{background:#263443;color:#bac8d7}
+body[data-theme="dark"] .empty-clock{background:#2b435a;color:#c0cddd}
+body[data-theme="dark"] .tag-muted{background:#30485f;color:#d1dbe8}
+body[data-theme="dark"] .kpi-label,body[data-theme="dark"] .panel-head p,body[data-theme="dark"] .subtitle,body[data-theme="dark"] .section-meta{color:#bdc9d8}
+body[data-theme="dark"] .swatch-m{background:#00a5f5}.swatch-f{background:#ed4ee0}
 .map-wrap #road-map{position:absolute;inset:0;width:100%;height:100%;z-index:1}
 .map-empty{z-index:500;pointer-events:none}
+.map-empty[hidden]{display:none}
 .leaflet-container{font-family:'DM Sans','Noto Sans Thai',sans-serif;background:#e5ebed}
 .leaflet-popup-content{font-size:11px;line-height:1.6}
 .fatality-marker{width:9px!important;height:9px!important;margin-left:0!important;margin-top:0!important;border-radius:50%;background:#e76b59;border:1.5px solid #fff;box-shadow:0 1px 4px #14233766}
 .map-legend{z-index:1000}
 .density-line{display:inline-block;width:12px;height:3px;margin-right:3px;border-radius:3px;background:#59a992}
 .density-line.mid{background:#ed9b47}.density-line.high{background:#d84e45}
+.hero-counter{position:relative;min-height:168px;margin:0 0 18px;padding:16px 24px 20px;border-radius:17px;background:linear-gradient(125deg,#b71919 0%,#cf2521 58%,#b91920 100%);color:#fff;box-shadow:0 13px 30px rgba(167,30,30,.18);overflow:hidden}
+.hero-counter h2{margin:0 auto 12px;max-width:760px;padding:0 0 8px;border-bottom:1px solid rgba(255,255,255,.72);text-align:center;font-size:clamp(18px,2.3vw,25px);font-weight:700;line-height:1.35;letter-spacing:.1px}
+.hero-counter-number{display:flex;justify-content:center;align-items:center;gap:5px;padding-right:38px}
+.hero-digit{display:grid;place-items:center;width:clamp(37px,5vw,54px);height:clamp(48px,6vw,62px);border-radius:10px;background:#f6f6f4;color:#111;font-size:clamp(32px,5vw,47px);font-weight:700;line-height:1;font-variant-numeric:tabular-nums;box-shadow:inset 0 -3px 0 rgba(0,0,0,.08)}
+.hero-separator{align-self:flex-end;margin:0 -3px 2px;color:#fff;font-size:33px;font-weight:700;line-height:1}
+.hero-counter-unit{position:absolute;right:22px;bottom:27px;font-size:14px;font-weight:700}
+body[data-theme="dark"] .hero-counter{box-shadow:0 13px 34px rgba(0,0,0,.3)}
+@media(max-width:720px){.hero-counter{min-height:145px;padding:14px 13px 18px}.hero-counter-number{gap:3px;padding-right:25px}.hero-digit{border-radius:8px}.hero-counter-unit{right:13px;bottom:23px;font-size:12px}}
 .province-unavailable{color:#a27635;font-size:9px}
 .hotspots-panel{margin-top:14px}
 .hotspots-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}

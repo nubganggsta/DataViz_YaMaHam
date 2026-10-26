@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#0b1420">
   <title>Thailand Road Fatality Atlas</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.4/dist/MarkerCluster.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.4/dist/MarkerCluster.Default.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.4/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.4/dist/MarkerCluster.Default.css">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-theme="dark">
   <div class="app-shell">
     <aside class="rail">
       <div class="brand-mark">R<span>×</span></div>
@@ -41,9 +41,15 @@
         </div>
       </header>
 
+      <section class="hero-counter" aria-live="polite" aria-label="จำนวนผู้เสียชีวิตตามปีที่เลือก">
+        <h2 id="hero-counter-label">ผู้เสียชีวิตสะสมในชุดข้อมูล ปี 2566–2568</h2>
+        <div class="hero-counter-number" id="hero-counter-number" aria-label="จำนวนผู้เสียชีวิต">—</div>
+        <span class="hero-counter-unit">ราย</span>
+      </section>
+
       <section class="data-note" id="data-note">
         <div class="note-icon">!</div>
-        <div><strong>ข้อจำกัดข้อมูลวันเกิดเหตุ</strong><p>ฟิลด์ Date Rec และ Time Rec ว่างทั้งหมด จึงไม่สามารถระบุวันเกิดเหตุ วันในสัปดาห์ เวลาเกิดเหตุ หรือจับคู่เทศกาลกับวันเกิดเหตุได้ กราฟวันที่ด้านล่างใช้วันเสียชีวิต (Dead_Date) และระบุแยกชัดเจน</p></div>
+        <div><strong>แยกวันเกิดเหตุออกจากวันเสียชีวิต</strong><p>ฟิลด์ Date Rec และ Time Rec ว่างทั้งหมด จึงวิเคราะห์วันและเวลาเกิดเหตุไม่ได้ ปฏิทินวันหยุดด้านล่างจับคู่ตรงกับ Dead_Date จึงหมายถึงวันเสียชีวิตตรงกับวันในปฏิทิน ไม่ยืนยันว่าเกิดเหตุในวันหยุด</p></div>
         <span class="note-count" id="incident-coverage">0% ครอบคลุม</span>
       </section>
 
@@ -54,21 +60,21 @@
         <article class="kpi-card accent-violet"><div class="kpi-label">ระบุวันเกิดเหตุได้</div><div class="kpi-value" id="kpi-incident">—</div><div class="kpi-foot">ใช้ Date Rec เท่านั้น · ไม่แทนด้วยวันเสียชีวิต</div><div class="kpi-icon">◷</div></article>
       </section>
 
-      <section class="section-heading" id="time"><div><div class="eyebrow">01 / TEMPORAL SIGNALS</div><h2>เวลาและเทศกาล</h2></div><span class="section-meta">วันเกิดเหตุเป็นฐานวิเคราะห์เมื่อมีข้อมูล</span></section>
+      <section class="section-heading" id="time"><div><div class="eyebrow">01 / TEMPORAL SIGNALS</div><h2>วันเสียชีวิตและเทศกาล</h2></div><span class="section-meta">ใช้ Dead_Date · วันเกิดเหตุไม่มีข้อมูล</span></section>
       <section class="two-col temporal-grid">
         <article class="panel chart-panel">
           <div class="panel-head"><div><h3>แนวโน้มการเสียชีวิตรายเดือน</h3><p>จัดกลุ่มตาม Dead_Date · วันที่เสียชีวิต</p></div><span class="tag tag-muted">ไม่ใช่วันเกิดเหตุ</span></div>
           <div class="chart-area"><canvas id="trend-chart" aria-label="กราฟแนวโน้มการเสียชีวิตรายเดือน"></canvas></div>
           <div class="legend-row" id="trend-legend"></div>
         </article>
-        <article class="panel unavailable-panel">
-          <div class="panel-head"><div><h3>ช่วงวันและเวลาที่เกิดเหตุ</h3><p>วันในสัปดาห์ × ชั่วโมงเกิดเหตุ</p></div><span class="tag tag-warn">ข้อมูลไม่พร้อม</span></div>
-          <div class="empty-state"><div class="empty-clock">◷</div><strong>ยังสร้าง Heatmap วัน–เวลาไม่ได้</strong><p>ไม่มีค่า Date Rec และ Time Rec ในระเบียน จึงยังระบุช่วงเวลาอันตรายจากวันเกิดเหตุไม่ได้</p></div>
+        <article class="panel chart-panel">
+          <div class="panel-head"><div><h3>จำนวนผู้เสียชีวิตสะสม แยกตามวันในสัปดาห์</h3><p>สกัดวันจาก Dead_Date · เป็นวันเสียชีวิต ไม่ใช่วันเกิดเหตุ</p></div><span class="tag tag-muted">วันเสียชีวิต</span></div>
+          <div class="chart-area"><canvas id="weekday-chart" aria-label="กราฟจำนวนผู้เสียชีวิตแยกตามวันในสัปดาห์ของวันเสียชีวิต"></canvas></div>
         </article>
         <article class="panel unavailable-panel festival-panel">
-          <div class="panel-head"><div><h3>เทศกาลและ 7 วันอันตราย</h3><p>เปรียบเทียบวันเทศกาลกับวันปกติ</p></div><span class="tag tag-warn">รอวันเกิดเหตุ</span></div>
-          <div class="festival-status"><div class="festival-icon">✳</div><div><strong id="holiday-matches">ยังจับคู่ไม่ได้</strong><p>ปฏิทินวันหยุดเตรียมพร้อมแล้ว แต่จะ join กับ Date Rec เท่านั้น เมื่อข้อมูลวันเกิดเหตุมีค่า</p></div></div>
-          <div class="festival-rule"><span class="rule-dot"></span>ไม่ใช้ Dead_Date แทนวันเกิดเหตุในการนับเทศกาล</div>
+          <div class="panel-head"><div><h3>วันเสียชีวิตตรงกับวันหยุด/เทศกาล</h3><p>จับคู่ Dead_Date กับวันที่ในปฏิทินวันหยุด</p></div><span class="tag tag-muted">อิงวันเสียชีวิต</span></div>
+          <div class="festival-status"><div class="festival-icon">✳</div><div><strong id="holiday-matches">กำลังจับคู่…</strong><p>นับระเบียนที่วันเสียชีวิตตรงกับวันที่ปฏิทินระบุว่าเป็นวันหยุด</p></div></div>
+          <div class="festival-rule"><span class="rule-dot"></span>ปฏิทินนี้จับคู่เป็นวันรายวัน ไม่ได้ยืนยันวันเกิดเหตุหรืออนุมานช่วง 7 วันอันตราย</div>
         </article>
       </section>
 
@@ -79,12 +85,8 @@
           <div class="chart-area pyramid-area"><canvas id="pyramid-chart" aria-label="กราฟประชากรอายุและเพศ"></canvas></div>
         </article>
         <article class="panel chart-panel">
-          <div class="panel-head"><div><h3>พาหนะของผู้เสียชีวิต</h3><p>กลุ่มพาหนะตามข้อมูลต้นทาง</p></div></div>
+          <div class="panel-head"><div><h3>จำนวนผู้เสียชีวิตสะสม แยกตามประเภทรถ</h3><p>นับตามประเภทรถจากข้อมูลต้นทาง · ไม่แยกตามรหัส ICD‑10</p></div></div>
           <div class="chart-area tall-chart"><canvas id="vehicle-chart" aria-label="กราฟพาหนะ"></canvas></div>
-        </article>
-        <article class="panel chart-panel">
-          <div class="panel-head"><div><h3>พาหนะ × อักษรนำหน้า ICD‑10</h3><p>Grouped bars · นับระเบียนตามประเภทพาหนะและตัวอักษรรหัส</p></div></div>
-          <div class="chart-area tall-chart"><canvas id="vehicle-cause-chart" aria-label="กราฟพาหนะจำแนกตามอักษรนำหน้ารหัส ICD-10"></canvas></div><div class="legend-row" id="crash-legend"></div>
         </article>
         <article class="panel chart-panel">
           <div class="panel-head"><div><h3>รหัสสาเหตุการเสียชีวิต</h3><p>Cause_Code · กลุ่มรหัส ICD-10 ที่พบบ่อย</p></div></div>
@@ -113,7 +115,7 @@
     </main>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.4/dist/leaflet.markercluster.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.4/dist/leaflet.markercluster.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
