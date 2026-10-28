@@ -3,7 +3,7 @@ const fmt = new Intl.NumberFormat('th-TH');
 const MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const AGE_BANDS = ['0–14','15–19','20–24','25–29','30–34','35–39','40–44','45–49','50–54','55–59','60–64','65+'];
 const SEX_M = 'ชาย', SEX_F = 'หญิง';
-let DATA = null, selectedYear = 'all', selectedRoadType = 'all', mapZoom = 1, mapPanX = 0, mapPanY = 0, dragging = false, dragStart = null;
+let DATA = null, ACCIDENTS = null, selectedYear = 'all', selectedRoadType = 'all', mapZoom = 1, mapPanX = 0, mapPanY = 0, dragging = false, dragStart = null;
 let mapBounds = null, leafletMap = null, roadLayer = null, pointLayer = null, hasMarkerCluster = false;
 
 function isValue(v){ return v !== null && v !== undefined && v !== '' && String(v).toLowerCase() !== 'nan'; }
@@ -48,14 +48,20 @@ function drawTrend(rows){
   const lg=document.getElementById('trend-legend');lg.innerHTML='';years.forEach((yr,i)=>{if(selectedYear!=='all'&&selectedYear!==yr)return;const item=document.createElement('span');item.className='legend-year';item.innerHTML=`<i style="background:${colors[i]}"></i>พ.ศ. ${Number(yr)+543}`;lg.appendChild(item)});
 }
 
-function ageBand(age){const n=Number(age);if(!Number.isFinite(n)||n<0)return null;if(n<15)return 0;if(n<20)return 1;if(n<25)return 2;if(n<30)return 3;if(n<35)return 4;if(n<40)return 5;if(n<45)return 6;if(n<50)return 7;if(n<55)return 8;if(n<60)return 9;if(n<65)return 10;return 11}
+function ageBand(age){const n=Number(age);if(!Number.isFinite(n)||n<0)return null;if(n<15)return 0;if(n<19)return 1;if(n<25)return 2;if(n<36)return 3;if(n<61)return 4;return 5}
+function drawAgeIcon(ctx,x,y,size,stage,color){
+  const heights=[.56,.68,.77,.86,1,.94],scale=size*heights[stage],cx=x,base=y+size*.42;
+  ctx.save();ctx.fillStyle=color;ctx.strokeStyle=color;ctx.lineWidth=Math.max(1.6,size*.12);ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.beginPath();ctx.arc(cx,base-scale*.88,scale*.13,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.moveTo(cx,base-scale*.70);ctx.lineTo(cx,base-scale*.35);ctx.moveTo(cx,base-scale*.60);ctx.lineTo(cx-scale*.25,base-scale*.42);ctx.moveTo(cx,base-scale*.60);ctx.lineTo(cx+scale*.25,base-scale*.42);ctx.moveTo(cx,base-scale*.35);ctx.lineTo(cx-scale*.2,base);ctx.moveTo(cx,base-scale*.35);ctx.lineTo(cx+scale*.2,base);ctx.stroke();ctx.restore();
+}
 function drawPyramid(rows){
   const s=resizeCanvas(document.getElementById('pyramid-chart'));if(!s)return;const {ctx,w,h}=s;ctx.clearRect(0,0,w,h);
-  const m=Array(12).fill(0),f=Array(12).fill(0);for(const r of rows){const i=ageBand(r.age);if(i===null)continue;if(r.sex===SEX_M)m[i]++;else if(r.sex===SEX_F)f[i]++}
-  const max=Math.max(1,...m,...f),mid=w*.5,top=12,rowH=(h-22)/12,half=Math.min(w*.30,160),theme=chartTheme();
-  ctx.font='9px "Noto Sans Thai",sans-serif';
-  ctx.strokeStyle=theme.grid;ctx.beginPath();ctx.moveTo(mid,8);ctx.lineTo(mid,h-8);ctx.stroke();
-  for(let i=0;i<12;i++){const y=top+i*rowH,barH=Math.max(5,rowH*.56),mw=m[i]/max*half,fw=f[i]/max*half;ctx.fillStyle='#00a5f5';roundedRect(ctx,mid-42-mw,y+(rowH-barH)/2,mw,barH,3);ctx.fill();ctx.fillStyle='#ed4ee0';roundedRect(ctx,mid+42,y+(rowH-barH)/2,fw,barH,3);ctx.fill();ctx.textAlign='center';ctx.fillStyle=theme.text;ctx.fillText(AGE_BANDS[i],mid,y+rowH*.72)}
+  const bands=[['1–14',0,15],['15–18',15,19],['19–24',19,25],['25–35',25,36],['36–60',36,61],['60+',61,Infinity]],m=Array(6).fill(0),f=Array(6).fill(0);
+  for(const r of rows){const age=Number(r.age);if(!Number.isFinite(age)||age<0)continue;const i=bands.findIndex((b,j)=>age>=b[1]&&age<b[2]);if(i<0)continue;if(r.sex===SEX_M)m[i]++;else if(r.sex===SEX_F)f[i]++}
+  const max=Math.max(1,...m,...f),mid=w*.5,top=4,rowH=(h-8)/6,gap=Math.min(52,w*.17),half=Math.max(10,Math.min(w*.23,125,mid-gap-38)),theme=chartTheme();
+  ctx.font='9px "Noto Sans Thai",sans-serif';ctx.strokeStyle=theme.grid;ctx.beginPath();ctx.moveTo(mid,top);ctx.lineTo(mid,h-top);ctx.stroke();
+  bands.forEach((band,i)=>{const y=top+i*rowH,barH=Math.min(18,rowH*.43),center=y+rowH*.53,mw=m[i]/max*half,fw=f[i]/max*half;ctx.fillStyle='#00a5f5';roundedRect(ctx,mid-gap-mw,center-barH/2,mw,barH,4);ctx.fill();ctx.fillStyle='#ed4ee0';roundedRect(ctx,mid+gap,center-barH/2,fw,barH,4);ctx.fill();drawAgeIcon(ctx,mid,center-rowH*.12,Math.min(18,rowH*.5),i,document.body.dataset.theme==='dark'?'#dbe8f5':'#66758a');ctx.fillStyle=theme.text;ctx.textAlign='center';ctx.font='9px "Noto Sans Thai",sans-serif';ctx.fillText(`${band[0]} ปี`,mid,center+rowH*.3);ctx.font='8px "Noto Sans Thai",sans-serif';ctx.fillStyle='#00a5f5';ctx.textAlign='right';ctx.fillText(fmt.format(m[i]),mid-gap-mw-4,center+3);ctx.fillStyle='#ed4ee0';ctx.textAlign='left';ctx.fillText(fmt.format(f[i]),mid+gap+fw+4,center+3)})
 }
 
 function drawBars(canvasId, rows, key, color, limit=8){
@@ -66,11 +72,72 @@ function drawBars(canvasId, rows, key, color, limit=8){
   items.forEach(([label,value],i)=>{const y=5+i*rowH;ctx.fillStyle=theme.text;ctx.textAlign='right';const shown=label.length>22?label.slice(0,21)+'…':label;ctx.fillText(shown,left-9,y+rowH*.65);ctx.fillStyle=theme.track;roundedRect(ctx,left,y+rowH*.23,barW,rowH*.52,4);ctx.fill();ctx.fillStyle=color;roundedRect(ctx,left,y+rowH*.23,Math.max(2,barW*value/max),rowH*.52,4);ctx.fill();ctx.fillStyle=theme.text;ctx.textAlign='left';ctx.fillText(fmt.format(value),left+barW+7,y+rowH*.65)});
 }
 
+function selectedAccidentYears(){
+  if(!ACCIDENTS)return [];
+  return Object.entries(ACCIDENTS.years).filter(([year])=>selectedYear==='all'||year===selectedYear);
+}
+function accidentTotal(key){return selectedAccidentYears().reduce((sum,[,data])=>sum+(Number(data[key])||0),0)}
+function aggregateAccidentList(key, valueIndex=1){
+  const totals=new Map();
+  for(const [,data] of selectedAccidentYears())for(const item of data[key]||[]){const name=String(item[0]||'ไม่ระบุ');totals.set(name,(totals.get(name)||0)+(Number(item[valueIndex])||0))}
+  return [...totals.entries()].sort((a,b)=>b[1]-a[1]);
+}
+function updateAccidentDashboard(){
+  if(!ACCIDENTS)return;
+  setText('incident-events',fmt.format(accidentTotal('events')));
+  setText('incident-fatalities',fmt.format(accidentTotal('fatalities')));
+  setText('incident-serious',fmt.format(accidentTotal('serious')));
+  setText('incident-injuries',fmt.format(accidentTotal('injuries')));
+  drawIncidentMonthly();drawIncidentHours();drawIncidentWeekdays();
+  drawAccidentBars('incident-province-chart',aggregateAccidentList('provinces',1),'#00a5f5',12);
+  drawAccidentBars('incident-cause-chart',aggregateAccidentList('cause'),'#ed9b47',10);
+  drawAccidentBars('incident-collision-chart',aggregateAccidentList('collision'),'#bf7fbb',10);
+  drawAccidentBars('incident-vehicle-chart',aggregateAccidentList('vehicle'),'#31aa86',10);
+  drawAccidentBars('incident-weather-chart',aggregateAccidentList('weather'),'#00a5f5',10);
+  drawAccidentBars('incident-roadtype-chart',aggregateAccidentList('road_type'),'#7665bd',6);
+  const deathCounts=new Map();for(const row of DATA.records){const year=String(row.dead_year);deathCounts.set(year,(deathCounts.get(year)||0)+1)}
+  const body=document.getElementById('incident-year-table');body.replaceChildren();
+  for(const [year,data] of Object.entries(ACCIDENTS.years)){
+    const row=document.createElement('tr');if(selectedYear===year)row.className='selected-year-row';
+    const values=[`พ.ศ. ${Number(year)+543}`,fmt.format(deathCounts.get(year)||0),fmt.format(data.events),fmt.format(data.fatalities),fmt.format(data.serious),fmt.format(data.minor),`${fmt.format(data.coordinates)} (${(data.coordinates/data.events*100).toFixed(1)}%)`];
+    for(const value of values){const cell=document.createElement('td');cell.textContent=value;row.append(cell)}body.append(row);
+  }
+}
+function drawIncidentMonthly(){
+  const s=resizeCanvas(document.getElementById('incident-month-chart'));if(!s)return;
+  const {ctx,w,h}=s,years=selectedAccidentYears(),theme=chartTheme(),colors={2023:'#ffc83d',2024:'#00a5f5',2025:'#31c48d'},pad={l:37,r:12,t:12,b:28},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
+  ctx.clearRect(0,0,w,h);const max=Math.max(1,...years.flatMap(([,d])=>d.monthly));
+  ctx.font='9px "Noto Sans Thai",sans-serif';ctx.textAlign='right';ctx.fillStyle=theme.text;ctx.strokeStyle=theme.grid;
+  for(let i=0;i<=4;i++){const y=pad.t+ch*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(fmt.format(Math.round(max*(1-i/4))),pad.l-5,y+3)}
+  MONTHS.forEach((month,i)=>{const x=pad.l+cw*i/11;ctx.textAlign='center';ctx.fillStyle=theme.text;ctx.fillText(month,x,h-7)});
+  for(const [year,data] of years){ctx.beginPath();ctx.strokeStyle=colors[year]||'#e96654';ctx.lineWidth=2;data.monthly.forEach((value,i)=>{const x=pad.l+cw*i/11,y=pad.t+ch-(value/max)*ch;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();data.monthly.forEach((value,i)=>{const x=pad.l+cw*i/11,y=pad.t+ch-(value/max)*ch;ctx.fillStyle=colors[year]||'#e96654';ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);ctx.fill()})}
+  const legend=document.getElementById('incident-month-legend');legend.replaceChildren();for(const [year] of years){const item=document.createElement('span');item.className='legend-year';item.innerHTML=`<i style="background:${colors[year]||'#e96654'}"></i>พ.ศ. ${Number(year)+543}`;legend.append(item)}
+}
+function drawIncidentHours(){
+  const s=resizeCanvas(document.getElementById('incident-hour-chart'));if(!s)return;
+  const {ctx,w,h}=s,theme=chartTheme(),hours=Array(12).fill(0);for(const [,data] of selectedAccidentYears())data.hours.forEach((n,i)=>hours[i]+=Number(n)||0);
+  ctx.clearRect(0,0,w,h);const max=Math.max(1,...hours),left=36,right=8,top=9,bottom=28,barW=(w-left-right)/12;
+  for(let i=0;i<12;i++){const x=left+i*barW+2,bh=(h-top-bottom)*hours[i]/max,y=h-bottom-bh;ctx.fillStyle=theme.track;roundedRect(ctx,x,top,Math.max(2,barW-4),h-top-bottom,4);ctx.fill();ctx.fillStyle='#ed9b47';roundedRect(ctx,x,y,Math.max(2,barW-4),bh,4);ctx.fill();ctx.fillStyle=theme.text;ctx.font='8px "Noto Sans Thai",sans-serif';ctx.textAlign='center';ctx.fillText(String(i*2).padStart(2,'0'),x+barW/2,h-12)}
+}
+function drawIncidentWeekdays(){
+  const s=resizeCanvas(document.getElementById('incident-weekday-chart'));if(!s)return;
+  const {ctx,w,h}=s,days=['จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์','อาทิตย์'],counts=Array(7).fill(0),theme=chartTheme();
+  for(const [,data] of selectedAccidentYears())data.weekdays.forEach((n,i)=>counts[i]+=Number(n)||0);
+  ctx.clearRect(0,0,w,h);const max=Math.max(1,...counts),left=Math.min(90,w*.3),right=45,top=6,rowH=(h-12)/7,barW=w-left-right;
+  ctx.font='9px "Noto Sans Thai",sans-serif';days.forEach((day,i)=>{const y=top+i*rowH,bh=Math.min(17,rowH*.58);ctx.fillStyle=theme.text;ctx.textAlign='right';ctx.fillText(day,left-8,y+rowH*.65);ctx.fillStyle=theme.track;roundedRect(ctx,left,y+(rowH-bh)/2,barW,bh,4);ctx.fill();ctx.fillStyle=i>=5?'#ed9b47':'#00a5f5';roundedRect(ctx,left,y+(rowH-bh)/2,Math.max(2,barW*counts[i]/max),bh,4);ctx.fill();ctx.fillStyle=theme.text;ctx.textAlign='left';ctx.fillText(fmt.format(counts[i]),left+barW+7,y+rowH*.65)});
+}
+function drawAccidentBars(canvasId,entries,color,limit=10){
+  const s=resizeCanvas(document.getElementById(canvasId));if(!s)return;const {ctx,w,h}=s,theme=chartTheme();ctx.clearRect(0,0,w,h);
+  const items=entries.filter(([name])=>name!=='ไม่ระบุ').slice(0,limit);if(!items.length){ctx.fillStyle=theme.text;ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText('ไม่มีข้อมูล',w/2,h/2);return}
+  const left=Math.min(160,w*.46),right=48,rowH=Math.min(25,(h-8)/items.length),max=Math.max(1,items[0][1]),barW=w-left-right;ctx.font='9px "Noto Sans Thai",sans-serif';
+  items.forEach(([name,value],i)=>{const y=4+i*rowH,short=name.length>22?name.slice(0,21)+'…':name;ctx.fillStyle=theme.text;ctx.textAlign='right';ctx.fillText(short,left-8,y+rowH*.66);ctx.fillStyle=theme.track;roundedRect(ctx,left,y+rowH*.22,barW,rowH*.52,4);ctx.fill();ctx.fillStyle=color;roundedRect(ctx,left,y+rowH*.22,Math.max(2,barW*value/max),rowH*.52,4);ctx.fill();ctx.fillStyle=theme.text;ctx.textAlign='left';ctx.fillText(fmt.format(value),left+barW+7,y+rowH*.66)});
+}
+
 function updateQuality(rows){
   const missingAge=rows.length-countVal(rows,'age'),missingCause=rows.length-countVal(rows,'cause'),coords=rows.filter(r=>isValue(r.latitude)&&isValue(r.longitude)).length;
   const matched=rows.filter(r=>r.road_status==='matched').length,traffic=rows.filter(r=>isValue(r.traffic_aadt)).length;
   const notes=[
-    `วันเกิดเหตุ: ${fmt.format(rows.length-countVal(rows,'incident_date'))} รายการไม่มี Date Rec จึงวิเคราะห์เวลาเกิดเหตุไม่ได้ · ปฏิทินวันหยุดจับคู่กับ Dead_Date โดยตรง`,
+    `RTDDI: ${fmt.format(rows.length-countVal(rows,'incident_date'))} ระเบียนไม่มี Date Rec; วิเคราะห์วันเวลาเกิดเหตุจาก TRAMS แยกอีกส่วน · ปฏิทินวันหยุดจับกับ Dead_Date`,
     `พิกัด: ${fmt.format(coords)} รายการมีพิกัด (${rows.length?((coords/rows.length)*100).toFixed(1):'0.0'}%); จับคู่เส้นถนนได้ ${fmt.format(matched)} รายการภายใน 100 เมตร`,
     `อายุ: ${fmt.format(missingAge)} รายการไม่ระบุอายุ · Cause_Code: ${fmt.format(missingCause)} รายการไม่ระบุรหัส`,
     `อุปกรณ์นิรภัย: หมวกและเข็มขัดไม่มีค่าในข้อมูลทุกแถว จึงไม่อนุมานการไม่ใช้`,
@@ -95,9 +162,9 @@ function drawHotspots(rows,counts){const list=document.getElementById('hotspots-
 
 function csvEscape(v){const x=(v===null||v===undefined)?'':String(v);return '"'+x.replaceAll('"','""')+'"'}
 function exportCsv(){const rows=filtered();const cols=['id','dead_year','death_date','incident_date','incident_time','age','sex','vehicle','cause','latitude','longitude','road_status','road_distance_m','highway_code','highway_name','road_code','road_name','km_start','km_end','traffic_aadt','traffic_years','holiday_name','festival'];const csv='\ufeff'+[cols.join(','),...rows.map(r=>cols.map(k=>csvEscape(r[k])).join(','))].join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`road-fatalities-${selectedYear==='all'?'all':Number(selectedYear)+543}.csv`;a.click();URL.revokeObjectURL(url)}
-function render(){const rows=filtered();updateKpis(rows);drawTrend(rows);drawWeekday(rows);drawPyramid(rows);drawBars('vehicle-chart',rows,'vehicle','#ff5a0a',8);drawBars('cause-chart',rows,'cause','#06b5bd',8);updateQuality(rows);drawMap()}
+function render(){const rows=filtered();updateKpis(rows);drawTrend(rows);drawWeekday(rows);drawPyramid(rows);drawBars('vehicle-chart',rows,'vehicle','#ff5a0a',8);drawBars('cause-chart',rows,'cause','#06b5bd',8);updateQuality(rows);updateAccidentDashboard();drawMap()}
 
 function setupMap(){if(!window.L){throw new Error('โหลด Leaflet ไม่สำเร็จ กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วเปิดหน้าเว็บใหม่')}leafletMap=L.map('road-map',{preferCanvas:true,scrollWheelZoom:true}).setView([13.736717,100.523186],6);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(leafletMap);roadLayer=L.layerGroup().addTo(leafletMap);hasMarkerCluster=typeof L.markerClusterGroup==='function';pointLayer=hasMarkerCluster?L.markerClusterGroup({chunkedLoading:true,showCoverageOnHover:false,spiderfyOnMaxZoom:true}):L.layerGroup();pointLayer.addTo(leafletMap);document.getElementById('show-roads').addEventListener('change',()=>{if(leafletMap.hasLayer(roadLayer))roadLayer.remove();if(document.getElementById('show-roads').checked)roadLayer.addTo(leafletMap);drawMap()});document.getElementById('show-points').addEventListener('change',()=>{if(leafletMap.hasLayer(pointLayer))pointLayer.remove();if(document.getElementById('show-points').checked)pointLayer.addTo(leafletMap);drawMap()});document.getElementById('road-type-filter').addEventListener('change',e=>{selectedRoadType=e.target.value;drawMap()});document.getElementById('map-reset').addEventListener('click',()=>leafletMap.setView([13.736717,100.523186],6))}
 
-async function boot(){try{setupMap();document.getElementById('year-filter').addEventListener('change',e=>{selectedYear=e.target.value;render()});document.getElementById('export-csv').addEventListener('click',exportCsv);const themeButton=document.getElementById('theme-toggle');themeButton.addEventListener('click',()=>{const dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';themeButton.textContent=dark?'☀ โหมดสว่าง':'☾ โหมดมืด';localStorage.setItem('road-dashboard-theme',dark?'dark':'light');render();setTimeout(()=>leafletMap.invalidateSize(),50)});const savedTheme=localStorage.getItem('road-dashboard-theme');if(savedTheme)document.body.dataset.theme=savedTheme;themeButton.textContent=document.body.dataset.theme==='dark'?'☀ โหมดสว่าง':'☾ โหมดมืด';window.addEventListener('resize',()=>render());const res=await fetch('data/dashboard_data.json');if(!res.ok)throw new Error(`โหลดข้อมูลไม่สำเร็จ (${res.status})`);DATA=await res.json();document.getElementById('data-note').classList.toggle('note-critical',DATA.meta.incident_dates===0);render()}catch(err){const next=location.protocol==='file:'?'เปิดจาก file:// จะอ่าน JSON ไม่ได้ ให้ปิดหน้านี้แล้วรัน .\\run_dashboard.ps1 จากโฟลเดอร์โปรเจกต์ จากนั้นเข้า http://127.0.0.1:8000':'เปิดด้วย .\\run_dashboard.ps1 หรือ node server.js และเชื่อมต่ออินเทอร์เน็ตสำหรับแผนที่พื้นหลัง';document.getElementById('data-note').innerHTML=`<div class="note-icon">!</div><div><strong>โหลด Dashboard ไม่สำเร็จ</strong><p>${err.message} · ${next}</p></div>`;console.error(err)}}
+async function boot(){try{setupMap();document.getElementById('year-filter').addEventListener('change',e=>{selectedYear=e.target.value;render()});document.getElementById('export-csv').addEventListener('click',exportCsv);const themeButton=document.getElementById('theme-toggle');themeButton.addEventListener('click',()=>{const dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';themeButton.textContent=dark?'☀ โหมดสว่าง':'☾ โหมดมืด';localStorage.setItem('road-dashboard-theme',dark?'dark':'light');render();setTimeout(()=>leafletMap.invalidateSize(),50)});const savedTheme=localStorage.getItem('road-dashboard-theme');if(savedTheme)document.body.dataset.theme=savedTheme;themeButton.textContent=document.body.dataset.theme==='dark'?'☀ โหมดสว่าง':'☾ โหมดมืด';window.addEventListener('resize',()=>render());const [deathResponse,accidentResponse]=await Promise.all([fetch('data/dashboard_data.json'),fetch('data/accident_summary.json')]);if(!deathResponse.ok)throw new Error(`โหลดข้อมูลผู้เสียชีวิตไม่สำเร็จ (${deathResponse.status})`);if(!accidentResponse.ok)throw new Error(`โหลดข้อมูลอุบัติเหตุไม่สำเร็จ (${accidentResponse.status})`);[DATA,ACCIDENTS]=await Promise.all([deathResponse.json(),accidentResponse.json()]);document.getElementById('data-note').classList.toggle('note-critical',DATA.meta.incident_dates===0);render()}catch(err){const next=location.protocol==='file:'?'เปิดจาก file:// จะอ่าน JSON ไม่ได้ ให้ปิดหน้านี้แล้วรัน .\\run_dashboard.ps1 จากโฟลเดอร์โปรเจกต์ จากนั้นเข้า http://127.0.0.1:8000':'เปิดด้วย .\\run_dashboard.ps1 หรือ node server.js และเชื่อมต่ออินเทอร์เน็ตสำหรับแผนที่พื้นหลัง';document.getElementById('data-note').innerHTML=`<div class="note-icon">!</div><div><strong>โหลด Dashboard ไม่สำเร็จ</strong><p>${err.message} · ${next}</p></div>`;console.error(err)}}
 document.addEventListener('DOMContentLoaded',boot);

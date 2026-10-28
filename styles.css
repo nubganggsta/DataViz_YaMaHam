@@ -40,3 +40,16 @@ body[data-theme="dark"] .hero-counter{box-shadow:0 13px 34px rgba(0,0,0,.3)}
 .hotspot-row strong{color:var(--ink);font-size:10px}
 .hotspot-row b{color:var(--coral);white-space:nowrap}
 @media(max-width:720px){.hotspots-list{grid-template-columns:1fr}.hotspot-row{grid-template-columns:1fr auto}.hotspot-row span{grid-column:1/-1;grid-row:2}}
+
+.gender-legend{gap:12px}.gender-legend span{display:inline-flex;align-items:center;gap:5px;color:var(--ink);font-weight:700}.gender-icon{width:14px;height:28px;display:block;flex:none}.male-icon{fill:#00a5f5}.female-icon{fill:#ed4ee0}.pyramid-area{height:276px}
+
+.gender-icon{width:18px;height:36px}
+
+.incident-intro{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:-2px 2px 13px;padding:12px 15px;border:1px solid var(--line);border-radius:12px;background:var(--paper);color:var(--muted);font-size:10px}
+.incident-intro div{display:flex;flex-direction:column;gap:4px}.incident-intro strong{color:var(--ink);font-size:12px}
+.download-link{flex:none;color:#227f9f;font-size:10px;font-weight:700;text-decoration:none;border:1px solid #cde6eb;background:#f2fbfc;padding:8px 10px;border-radius:9px}
+.download-link:hover{background:#e3f5f7}
+.incident-kpis{margin-bottom:14px}.incident-grid .panel{min-height:320px}.incident-grid .chart-area{height:255px}
+.incident-table-panel{margin-top:14px}.table-wrap{width:100%;overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:10px;white-space:nowrap}th,td{padding:10px 12px;text-align:right;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600;background:rgba(130,150,170,.06)}th:first-child,td:first-child{text-align:left}tbody tr:last-child td{border-bottom:0}.selected-year-row{background:rgba(62,120,188,.09);font-weight:700}
+body[data-theme="dark"] .download-link{background:#203b4a;border-color:#3d6070;color:#8fd9e8}body[data-theme="dark"] .download-link:hover{background:#2b4b5b}
+@media(max-width:720px){.incident-intro{align-items:flex-start;flex-direction:column}.incident-grid .panel{min-height:300px}.incident-grid .chart-area{height:235px}}

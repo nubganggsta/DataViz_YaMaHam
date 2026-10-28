@@ -10,3 +10,5 @@ if (Test-Path -LiteralPath $bundledPython) {
 Set-Location -LiteralPath $PSScriptRoot
 & $python (Join-Path $PSScriptRoot 'data\build_dashboard_data.py')
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& $python (Join-Path $PSScriptRoot 'data\build_accident_summary.py')
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
