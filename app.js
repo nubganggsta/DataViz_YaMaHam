@@ -24,19 +24,25 @@ const HIGHWAY_COLORS = {
 let DATA = null;          // dashboard_data.json
 let ACCIDENTS = null;     // accident_summary.json
 let PROVINCES_GEO = null; // provinces.geojson
+let mapAssetsPromise = null;
+let mapAssetsLoaded = false;
 
 let selectedYear = 'all';           // 'all', '2023', '2024', '2025'
 let selectedRegion = 'all';         // 'all' or Thai region name
 let selectedProvince = 'all';       // 'all' or Thai province name
 let selectedHighwayDigits = 'all';  // 'all', 'digit_1', 'digit_2', 'digit_3'
 let selectedVehicle = 'all';
-let selectedAuthority = 'all';
 let selectedFatality = 'all';
+const semanticFilters = { vehicle: 'all', cause: 'all', collision: 'all', weather: 'all' };
+let provinceFatalityCounts = new Map();
+let provinceEventCounts = new Map();
+let pendingRoadHighlightId = null;
 
 let leafletMap = null;
 let currentTileLayer = null;
 let labelTileLayer = null;
 let roadLayer = null;
+let roadHighlightLayer = null;
 let pointLayer = null;
 let boundaryLayer = null;
 let hasMarkerCluster = false;
@@ -116,14 +122,13 @@ function roundedRect(ctx, x, y, w, h, r) {
 }
 
 /* Data Filtering Functions */
-function getFilteredRecords() {
+function getFilteredRecords(ignoreSemantic = null) {
   if (!DATA?.records) return [];
   return DATA.records.filter(r => {
     if (selectedYear !== 'all' && String(r.year) !== selectedYear) return false;
     if (selectedRegion !== 'all' && r.region !== selectedRegion) return false;
     if (selectedProvince !== 'all' && r.province !== selectedProvince) return false;
     if (selectedVehicle !== 'all' && r.vehicle !== selectedVehicle) return false;
-    if (selectedAuthority !== 'all' && r.agency !== selectedAuthority) return false;
     if (selectedHighwayDigits !== 'all') {
       const code = String(r.highway_code || '');
       const digits = Number(r.highway_digits) || (/^\d+$/.test(code) ? code.length : 0);
@@ -132,6 +137,9 @@ function getFilteredRecords() {
     }
     if (selectedFatality === 'fatal' && !(Number(r.fatalities) > 0)) return false;
     if (selectedFatality === 'nonfatal' && Number(r.fatalities) > 0) return false;
+    for (const [key, value] of Object.entries(semanticFilters)) {
+      if (key !== ignoreSemantic && value !== 'all' && r[key] !== value) return false;
+    }
     const search = document.getElementById('road-search')?.value.trim().toLowerCase();
     if (search && !`${r.highway_code || ''} ${r.highway_code_raw || ''} ${r.road_name || ''}`.toLowerCase().includes(search)) return false;
     return true;
@@ -184,6 +192,19 @@ function updateHeroCounter(records) {
     numberEl.append(item);
   }
   numberEl.setAttribute('aria-label', `${fmt.format(totalDeaths)} ราย`);
+
+  const totalInjuries = records.reduce((sum, r) => sum + (Number(r.injuries) || 0), 0);
+  setText('injury-counter-label', `ผู้บาดเจ็บสะสม (${areaLabel}) ปี ${yearLabel}`);
+  const injuryNumberEl = document.getElementById('injury-counter-number');
+  if (!injuryNumberEl) return;
+  injuryNumberEl.replaceChildren();
+  for (const char of new Intl.NumberFormat('en-US').format(totalInjuries)) {
+    const item = document.createElement('span');
+    item.className = char === ',' ? 'hero-separator' : 'hero-digit';
+    item.textContent = char;
+    injuryNumberEl.append(item);
+  }
+  injuryNumberEl.setAttribute('aria-label', `${fmt.format(totalInjuries)} ราย`);
 }
 
 function updateKpis(records) {
@@ -200,8 +221,6 @@ function updateKpis(records) {
   setText('kpi-events-sub', `${fmt.format(records.length)} ACC_CODE ไม่ซ้ำ หลังใช้กติกาจัดการรหัสซ้ำ`);
   setText('incident-coverage', `${fmt.format(coords)} จาก ${fmt.format(records.length)} เหตุการณ์มีพิกัด (${records.length ? (100*coords/records.length).toFixed(1) : '0.0'}%)`);
   
-  const trafficCount = records.filter(r => isValue(r.traffic_aadt)).length;
-  setText('traffic-linked', fmt.format(trafficCount));
 }
 
 /* Breadcrumb and Filter Status */
@@ -382,6 +401,10 @@ function getProvinceStyle(feature) {
   const pname = feature.properties?.pro_th;
   const reg = feature.properties?.reg_th;
   const isDark = document.body.dataset.theme === 'dark';
+  const maxCount = Math.max(1, ...provinceFatalityCounts.values());
+  const value = provinceFatalityCounts.get(pname) || 0;
+  const ratio = value / maxCount;
+  const choropleth = value === 0 ? '#2E7D32' : ratio >= .75 ? '#A91B18' : ratio >= .45 ? '#FF8C00' : ratio >= .2 ? '#FFD700' : '#2E7D32';
 
   // Selected Province
   if (selectedProvince !== 'all') {
@@ -390,8 +413,8 @@ function getProvinceStyle(feature) {
         color: '#C1121F',
         weight: 2.8,
         opacity: 0.95,
-        fillColor: '#C1121F',
-        fillOpacity: isDark ? 0.15 : 0.13
+        fillColor: choropleth,
+        fillOpacity: .68
       };
     }
     // Same region
@@ -421,8 +444,8 @@ function getProvinceStyle(feature) {
         color: '#003049',
         weight: 1.8,
         opacity: 0.85,
-        fillColor: '#669BBC',
-        fillOpacity: isDark ? 0.08 : 0.04
+        fillColor: choropleth,
+        fillOpacity: .55
       };
     }
     // Outside Region
@@ -435,25 +458,129 @@ function getProvinceStyle(feature) {
     };
   }
 
-  // Country Level
+  // Country-level choropleth based on the currently filtered event counts.
   return {
-    color: isDark ? '#CEE7F3' : '#003049',
-    weight: 1,
-    opacity: 0.76,
-    fillColor: isDark ? '#669BBC' : '#003049',
-    fillOpacity: 0.02
+    color: isDark ? '#CEE7F3' : '#fff',
+    weight: 0.7,
+    opacity: 0.9,
+    fillColor: choropleth,
+    fillOpacity: value ? .68 : .12
   };
+}
+
+function normalizeCategory(field, raw) {
+  const text = String(raw || 'ไม่ระบุ').trim().replace(/\s+/g, ' ');
+  const lower = text.toLowerCase();
+  if (field === 'vehicle') {
+    if (/กระบะ|ปิกอัพ|ปิคอัพ|pickup|pick-up/.test(lower)) return 'รถกระบะ';
+    if (/มอเตอร์ไซค์|จักรยานยนต์|motorcycle|motorbike/.test(lower)) return 'รถจักรยานยนต์';
+    if (/เก๋ง|รถยนต์นั่ง|ส่วนบุคคล|sedan/.test(lower)) return 'รถยนต์นั่งส่วนบุคคล';
+    if (/บรรทุก|พ่วง|สิบล้อ|truck|trailer/.test(lower)) return 'รถบรรทุกใหญ่';
+  }
+  if (field === 'cause') {
+    if (/ขับเร็ว|ความเร็ว|เร็วเกิน/.test(text)) return 'ขับรถเร็วเกินกำหนด';
+    if (/ตัดหน้า|กระชั้นชิด/.test(text)) return 'ตัดหน้ากระชั้นชิด';
+    if (/เมา|แอลกอฮอล์|สุรา/.test(text)) return 'เมาสุรา';
+    if (/หลับใน|เพลีย|อ่อนล้า/.test(text)) return 'หลับใน';
+  }
+  return text || 'ไม่ระบุ';
+}
+
+const SEMANTIC_COLORS = ['#780000','#A91B18','#C1121F','#AE1F23','#FF8C00','#D97706','#003049','#669BBC','#9333ea','#1e40af','#db2777','#6b7280'];
+function categoryEntries(records, field) {
+  const counts = new Map();
+  for (const r of records) {
+    const label = normalizeCategory(field, r[field]);
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a,b)=>b[1]-a[1]);
+}
+
+function setSemanticFilter(field, value) {
+  semanticFilters[field] = semanticFilters[field] === value ? 'all' : value;
+  render();
+}
+
+function renderSemanticCharts() {
+  const vehicleRecords = getFilteredRecords('vehicle');
+  renderPie('semantic-vehicle', categoryEntries(vehicleRecords, 'vehicle'), 'vehicle');
+  renderTreemap('semantic-cause', categoryEntries(getFilteredRecords('cause'), 'cause'), 'cause');
+  renderTreemap('semantic-collision', categoryEntries(getFilteredRecords('collision'), 'collision'), 'collision');
+  renderWeather(getFilteredRecords('weather'));
+  renderDonut('semantic-roadtype', categoryEntries(getFilteredRecords(), 'agency'));
+  const active = Object.entries(semanticFilters).filter(([,v])=>v!=='all');
+  const status = document.getElementById('semantic-filter-status');
+  if (status) status.hidden = active.length === 0;
+  setText('semantic-filter-label', active.map(([k,v])=>`${({vehicle:'ยานพาหนะ',cause:'มูลเหตุ',collision:'ลักษณะเหตุ',weather:'สภาพอากาศ'})[k]}: ${v}`).join(' · '));
+}
+
+function renderPie(id, entries, field, donut=false) {
+  const host=document.getElementById(id); if(!host) return;
+  host.replaceChildren();
+  const total=entries.reduce((s,[,v])=>s+v,0)||1;
+  const donutPalette=['#C1121F','#CEE7F3','#181717'];
+  const colors=entries.map((_,i)=>donut?donutPalette[i%donutPalette.length]:SEMANTIC_COLORS[i%SEMANTIC_COLORS.length]);
+  let angle=0; const stops=entries.map(([name,value],i)=>{const start=angle;angle+=value/total*360;return `${colors[i]} ${start}deg ${angle}deg`;});
+  const wrap=document.createElement('div');wrap.className='pie-layout';
+  const pie=document.createElement('div');pie.className=donut?'donut-visual':'pie-visual';pie.style.background=stops.length?`conic-gradient(${stops.join(',')})`:'conic-gradient(#e5e7eb 0deg 360deg)';
+  const legend=document.createElement('div');legend.className='chart-legend-list';
+  entries.slice(0,12).forEach(([name,value],i)=>{
+    const button=document.createElement('button');button.type='button';button.className='chart-legend-item';
+    if(field && semanticFilters[field]===name) button.classList.add('is-selected');
+    button.title=`${name}: ${fmt.format(value)} เหตุการณ์ (${(100*value/total).toFixed(1)}%)`;
+    button.innerHTML=`<i style="--legend-color:${colors[i]}"></i><span>${escapeHtml(name)}</span><b>${fmt.format(value)} <small>(${(100*value/total).toFixed(1)}%)</small></b>`;
+    if(field) button.addEventListener('click',()=>setSemanticFilter(field,name));
+    legend.append(button);
+  });
+  wrap.append(pie,legend);host.append(wrap);
+}
+
+function renderDonut(id, entries) { renderPie(id,entries,null,true); }
+
+function renderTreemap(id, entries, field) {
+  const host=document.getElementById(id);if(!host)return;host.replaceChildren();
+  const total=entries.reduce((s,[,n])=>s+n,0)||1;
+  entries.slice(0,16).forEach(([name,value],i)=>{
+    const tile=document.createElement('button');tile.type='button';tile.className='treemap-tile';
+    tile.style.flexBasis=`${Math.max(13,100*value/total)}%`;tile.style.background=SEMANTIC_COLORS[i%SEMANTIC_COLORS.length];
+    tile.classList.toggle('is-selected',semanticFilters[field]===name);
+    tile.title=`${name}: ${fmt.format(value)} เหตุการณ์ (${(100*value/total).toFixed(1)}%)`;
+    tile.innerHTML=`<span>${escapeHtml(name)}</span><b>${fmt.format(value)}</b>`;
+    tile.addEventListener('click',()=>setSemanticFilter(field,name));host.append(tile);
+  });
+  if(!entries.length)host.textContent='ไม่มีข้อมูลในตัวกรองนี้';
+}
+
+function renderWeather(records) {
+  const host=document.getElementById('semantic-weather');if(!host)return;host.replaceChildren();
+  const entries=categoryEntries(records,'weather'),total=entries.reduce((s,[,v])=>s+v,0)||1;
+  const iconFor=(name)=>/ฝน/.test(name)?'🌧️':/หมอก|ควัน/.test(name)?'🌫️':/แดด|แจ้ง|ปกติ|แห้ง/.test(name)?'☀️':/ลม/.test(name)?'💨':'🌤️';
+  entries.slice(0,10).forEach(([name,value])=>{
+    const button=document.createElement('button');button.type='button';button.className='weather-tile';
+    button.classList.toggle('is-selected',semanticFilters.weather===name);
+    button.title=`${name}: ${fmt.format(value)} เหตุการณ์ (${(100*value/total).toFixed(1)}%)`;
+    button.innerHTML=`<span class="weather-icon">${iconFor(name)}</span><strong>${escapeHtml(name)}</strong><b>${fmt.format(value)}</b><small>${(100*value/total).toFixed(1)}%</small>`;
+    button.addEventListener('click',()=>setSemanticFilter('weather',name));host.append(button);
+  });
+  if(!entries.length)host.textContent='ไม่มีข้อมูลในตัวกรองนี้';
 }
 
 /* Draw Map */
 function drawMap(fitBounds = false) {
-  if (!DATA || !leafletMap) return;
+  if (!DATA || !leafletMap || !mapAssetsLoaded) return;
 
   const showRoads = document.getElementById('show-roads')?.checked ?? true;
   const showPoints = document.getElementById('show-points')?.checked ?? true;
   const showBoundary = document.getElementById('show-boundary')?.checked ?? true;
 
   const records = getFilteredRecords();
+  provinceFatalityCounts = new Map();
+  provinceEventCounts = new Map();
+  for (const record of records) {
+    const province = record.province || 'ไม่ระบุ';
+    provinceFatalityCounts.set(province, (provinceFatalityCounts.get(province) || 0) + (Number(record.fatalities) || 0));
+    provinceEventCounts.set(province, (provinceEventCounts.get(province) || 0) + 1);
+  }
   const roads = getFilteredRoads();
 
   // 1. Update Province Boundaries Layer
@@ -521,6 +648,7 @@ function drawMap(fitBounds = false) {
   pointLayer.clearLayers();
   if (showPoints) {
     const validPoints = records.filter(r => isValue(r.latitude) && isValue(r.longitude));
+    const markers = [];
     for (const r of validPoints) {
       const latlng = [Number(r.latitude), Number(r.longitude)];
       const fatal = (Number(r.fatalities) || 0) > 0;
@@ -541,7 +669,7 @@ function drawMap(fitBounds = false) {
             fillOpacity: 0.88
           });
 
-      marker.bindPopup(`
+      marker.bindPopup(() => `
         <div style="font-family:'Plus Jakarta Sans','Prompt',sans-serif;">
           <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin-bottom:6px;">
             <strong style="color:${fatal ? '#C1121F' : '#003049'};font-size:13px;">${fatal ? 'เหตุการณ์เสียชีวิต' : 'อุบัติเหตุ'} #${escapeHtml(r.id)}</strong>
@@ -559,8 +687,10 @@ function drawMap(fitBounds = false) {
           </div>
         </div>
       `);
-      pointLayer.addLayer(marker);
+      markers.push(marker);
     }
+    if (hasMarkerCluster) pointLayer.addLayers(markers);
+    else markers.forEach(marker => pointLayer.addLayer(marker));
   }
 
   // 5. Empty State & Summary Check
@@ -597,6 +727,112 @@ function drawMap(fitBounds = false) {
 
   // 9. Update Hotspots List
   drawHotspots(records, new Map());
+}
+
+async function loadMapAssets() {
+  if (mapAssetsPromise) return mapAssetsPromise;
+  mapAssetsPromise = (async () => {
+    const summary = document.getElementById('map-summary');
+    if (summary) summary.textContent = 'กำลังโหลดขอบเขตจังหวัดและโครงข่ายถนน…';
+    const [geoResponse, roadsResponse] = await Promise.all([
+      fetch('data/provinces.geojson'),
+      fetch('data/roads.json')
+    ]);
+    if (!geoResponse.ok) throw new Error(`โหลด provinces.geojson ไม่สำเร็จ (${geoResponse.status})`);
+    PROVINCES_GEO = await geoResponse.json();
+    DATA.roads = roadsResponse.ok ? await roadsResponse.json() : [];
+
+    for (const feat of PROVINCES_GEO.features || []) {
+      const props = feat.properties || (feat.properties = {});
+      const pname = props.PROV_NAM_T || props.pro_th;
+      props.pro_th = pname === 'อยุธยา' ? 'พระนครศรีอยุธยา' : pname;
+      const regEn = props.REGION_6 || props.reg_th || props.reg_royin;
+      const regTh = {
+        North: 'ภาคเหนือ', Northeast: 'ภาคตะวันออกเฉียงเหนือ', Central: 'ภาคกลาง',
+        East: 'ภาคตะวันออก', West: 'ภาคตะวันตก', South: 'ภาคใต้'
+      }[regEn] || regEn;
+      props.reg_th = regTh;
+      if (!props.pro_th || !DATA.provinces) continue;
+      const bounds = L.geoJSON(feat).getBounds();
+      if (!bounds.isValid()) continue;
+      const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+      DATA.provinces[props.pro_th] = {province: props.pro_th, region: regTh, bbox};
+      if (!DATA.regions[regTh]) DATA.regions[regTh] = {bbox};
+      else {
+        const old = DATA.regions[regTh].bbox;
+        DATA.regions[regTh].bbox = [Math.min(old[0],bbox[0]),Math.min(old[1],bbox[1]),Math.max(old[2],bbox[2]),Math.max(old[3],bbox[3])];
+      }
+    }
+    const provinceRegions = Object.fromEntries((PROVINCES_GEO.features || []).map(f => [f.properties?.pro_th, f.properties?.reg_th]));
+    for (const record of DATA.records || []) record.region = provinceRegions[record.province] || record.region || 'ไม่ระบุ';
+    for (const road of DATA.roads || []) road.region = road.region || provinceRegions[road.province] || 'ไม่ระบุ';
+    mapAssetsLoaded = true;
+    syncFilterDropdowns();
+    updateMapView(false);
+    drawMap(false);
+    window.HighwayScatter?.render(document.getElementById('highway-scatter-chart'), getFilteredRecords(), DATA.roads, highlightRoadSegment);
+    if (pendingRoadHighlightId !== null) highlightRoadSegment(pendingRoadHighlightId);
+  })().catch(err => {
+    mapAssetsPromise = null;
+    const summary = document.getElementById('map-summary');
+    if (summary) summary.textContent = `โหลดชั้นข้อมูลแผนที่ไม่สำเร็จ: ${err.message}`;
+    console.error('Error loading map layers:', err);
+    throw err;
+  });
+  return mapAssetsPromise;
+}
+
+function normalizeRoadFeatureId(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? String(Math.trunc(numeric)) : String(value ?? '').trim();
+}
+
+function highlightRoadSegment(featureId) {
+  pendingRoadHighlightId = featureId;
+  if (!mapAssetsLoaded) {
+    loadMapAssets().catch(() => {});
+    return;
+  }
+  const targetId = normalizeRoadFeatureId(featureId);
+  const road = (DATA?.roads || []).find(item => normalizeRoadFeatureId(item.id) === targetId);
+  const summary = document.getElementById('scatter-selection');
+  if (!road || !roadHighlightLayer || !leafletMap) {
+    if (summary) summary.insertAdjacentHTML('beforeend', '<div class="scatter-map-note">ไม่พบ Geometry ของช่วงทางนี้ในชั้นแผนที่</div>');
+    return;
+  }
+  roadHighlightLayer.clearLayers();
+  const highlightLines = [];
+  for (const line of road.lines || []) {
+    const polyline = L.polyline(line.map(([lon,lat])=>[lat,lon]), {
+      color: '#FFD700', weight: 7, opacity: .98, lineCap: 'round', lineJoin: 'round'
+    });
+    polyline.bindPopup(`<strong>ทล. ${escapeHtml(road.highway_code || 'ไม่ระบุ')}</strong><br>${escapeHtml(road.road_name || road.highway_name || 'ไม่ระบุชื่อช่วงทาง')}<br>ช่วงทาง ${escapeHtml(road.road_code || 'ไม่ระบุ')} · จ.${escapeHtml(road.province || 'ไม่ระบุ')}`);
+    polyline.addTo(roadHighlightLayer);
+    highlightLines.push(polyline);
+  }
+  if (!highlightLines.length) {
+    if (summary) summary.insertAdjacentHTML('beforeend', '<div class="scatter-map-note">ช่วงทางนี้ไม่มี LineString geometry ให้แสดง</div>');
+    return;
+  }
+  const bounds = roadHighlightLayer.getBounds();
+  if (bounds.isValid()) leafletMap.fitBounds(bounds, {padding:[48,48], maxZoom:14, animate:true});
+  highlightLines[0].openPopup();
+}
+
+function setupLazyMapLoading() {
+  const mapSection = document.querySelector('.map-panel');
+  if (!mapSection) return;
+  if (!('IntersectionObserver' in window)) {
+    loadMapAssets().catch(() => {});
+    return;
+  }
+  const observer = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) {
+      observer.disconnect();
+      loadMapAssets().catch(() => {});
+    }
+  }, {rootMargin: '700px 0px'});
+  observer.observe(mapSection);
 }
 
 /* Hotspots Ranking List */
@@ -693,7 +929,7 @@ function setupMap() {
       const pname = feature.properties?.pro_th;
       const reg = feature.properties?.reg_th;
       
-      layer.bindTooltip(`<strong>${escapeHtml(pname)}</strong> (${escapeHtml(reg)})`, {
+      layer.bindTooltip(() => `<strong>${escapeHtml(pname)}</strong> (${escapeHtml(reg)})<br>${fmt.format(provinceFatalityCounts.get(pname)||0)} ผู้เสียชีวิต · ${fmt.format(provinceEventCounts.get(pname)||0)} เหตุการณ์`, {
         sticky: true,
         direction: 'top',
         className: 'province-tooltip'
@@ -713,6 +949,7 @@ function setupMap() {
 
   // 2. Road Network Layer (Polyline)
   roadLayer = L.layerGroup().addTo(leafletMap);
+  roadHighlightLayer = L.layerGroup().addTo(leafletMap);
 
   // 3. Fatality Points Layer (MarkerCluster)
   hasMarkerCluster = typeof L.markerClusterGroup === 'function';
@@ -755,7 +992,7 @@ function setupMap() {
   // Highway Digit Filter Change (Does NOT reset region/province zoom!)
   document.getElementById('highway-digit-filter')?.addEventListener('change', e => {
     selectedHighwayDigits = e.target.value;
-    drawMap(false);
+    render();
   });
 
   // Reset Filters Button
@@ -802,7 +1039,7 @@ function summarizeFilteredRecords(records) {
 
 function selectedAccidentYears() {
   if (!ACCIDENTS?.years) return [];
-  if (selectedRegion !== 'all' || selectedProvince !== 'all' || selectedVehicle !== 'all' || selectedAuthority !== 'all' || selectedFatality !== 'all' || selectedHighwayDigits !== 'all' || document.getElementById('road-search')?.value.trim()) {
+  if (selectedRegion !== 'all' || selectedProvince !== 'all' || selectedVehicle !== 'all' || selectedFatality !== 'all' || selectedHighwayDigits !== 'all' || Object.values(semanticFilters).some(v=>v!=='all') || document.getElementById('road-search')?.value.trim()) {
     const selected = getFilteredRecords();
     const year = selectedYear === 'all' ? 'รวม' : selectedYear;
     return [[year, summarizeFilteredRecords(selected)]];
@@ -1023,28 +1260,43 @@ function drawWeekdayHour(records) {
   if (!s) return;
   const { ctx, w, h } = s, theme = chartTheme();
   ctx.clearRect(0, 0, w, h);
-  const cells = Array.from({length:7},()=>Array(12).fill(0));
+  const cells = Array.from({length:7},()=>Array(24).fill(0));
+  const dayTotals = Array(7).fill(0), hourTotals = Array(24).fill(0);
   for (const r of records) {
     if (!r.incident_date) continue;
     const date = new Date(`${r.incident_date}T00:00:00Z`);
     const hour = Number.parseInt(String(r.incident_time || '').slice(0,2),10);
     if (Number.isNaN(+date) || !Number.isFinite(hour) || hour<0 || hour>23) continue;
-    cells[(date.getUTCDay()+6)%7][Math.floor(hour/2)]++;
+    const day=(date.getUTCDay()+6)%7; cells[day][hour]++; dayTotals[day]++; hourTotals[hour]++;
   }
-  const max=Math.max(1,...cells.flat()), pad={l:76,r:8,t:22,b:8};
-  const cw=(w-pad.l-pad.r)/12, ch=(h-pad.t-pad.b)/7;
-  const labels=['00','02','04','06','08','10','12','14','16','18','20','22'];
-  ctx.font=`600 9px ${theme.font}`; ctx.textAlign='center'; ctx.textBaseline='middle';
-  labels.forEach((label,i)=>{ctx.fillStyle=theme.textMuted;ctx.fillText(label,pad.l+(i+.5)*cw,10);});
+  const max=Math.max(1,...cells.flat()), pad={l:74,r:48,t:24,b:34};
+  const cw=(w-pad.l-pad.r)/25, ch=(h-pad.t-pad.b)/8;
+  const totalBackground = document.body.dataset.theme === 'dark' ? '#374151' : '#e5e7eb';
+  ctx.font=`600 8px ${theme.font}`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<24;i++){ctx.fillStyle=theme.textMuted;ctx.fillText(String(i).padStart(2,'0'),pad.l+(i+.5)*cw,12);}
+  ctx.fillText('รวม',pad.l+24.5*cw,12);
   WEEKDAYS.forEach((day,y)=>{
     ctx.textAlign='right';ctx.fillStyle=theme.text;ctx.fillText(day,pad.l-8,pad.t+(y+.5)*ch);
-    for(let x=0;x<12;x++){
-      const v=cells[y][x],alpha=.12+.88*v/max;
-      ctx.fillStyle=document.body.dataset.theme==='dark'?`rgba(102,155,188,${alpha})`:`rgba(0,48,73,${alpha})`;
-      ctx.fillRect(pad.l+x*cw+1,pad.t+y*ch+1,Math.max(1,cw-2),Math.max(1,ch-2));
-      if(cw>34){ctx.fillStyle=alpha>.55?'#fff':theme.text;ctx.textAlign='center';ctx.fillText(fmt.format(v),pad.l+(x+.5)*cw,pad.t+(y+.5)*ch);}
+    for(let x=0;x<25;x++){
+      const v=x===24?dayTotals[y]:cells[y][x],alpha=x===24?.18+.82*v/Math.max(1,...dayTotals):.12+.88*v/max;
+      {
+        ctx.fillStyle=x===24?totalBackground:heatColor(alpha);
+        ctx.fillRect(pad.l+x*cw+1,pad.t+y*ch+1,Math.max(1,cw-2),Math.max(1,ch-2));
+      }
+      if(cw>22){ctx.fillStyle=x!==24&&alpha>.84?'#fff':theme.text;ctx.textAlign='center';ctx.fillText(fmt.format(v),pad.l+(x+.5)*cw,pad.t+(y+.5)*ch);}
     }
   });
+  ctx.textAlign='right';ctx.fillStyle=theme.text;ctx.fillText('รวม',pad.l-8,pad.t+7.5*ch);
+  for(let x=0;x<25;x++){
+    const v=x===24?dayTotals.reduce((a,b)=>a+b,0):hourTotals[x];
+    ctx.fillStyle=totalBackground;ctx.fillRect(pad.l+x*cw+1,pad.t+7*ch+1,Math.max(1,cw-2),Math.max(1,ch-2));
+    ctx.fillStyle=theme.text;ctx.textAlign='center';ctx.fillText(fmt.format(v),pad.l+(x+.5)*cw,pad.t+7.5*ch);
+  }
+}
+
+function heatColor(t){
+  const stops=[[255,215,0],[255,140,0],[169,27,24]],v=Math.max(0,Math.min(.999,t))*2,i=Math.floor(v),f=v-i,a=stops[i],b=stops[i+1];
+  return `rgb(${a.map((c,j)=>Math.round(c+(b[j]-c)*f)).join(',')})`;
 }
 
 /* Horizontal Bar Chart Generator */
@@ -1126,39 +1378,37 @@ function updateAccidentDashboard() {
   setText('incident-serious', fmt.format(accidentTotal('serious')));
   setText('incident-injuries', fmt.format(accidentTotal('injuries')));
 
-  drawIncidentMonthly();
-  drawIncidentHours();
-  drawIncidentWeekdays();
-
-  drawBars('incident-province-chart', aggregateAccidentList('provinces', 1), '#003049', 12);
-  drawBars('incident-cause-chart', aggregateAccidentList('cause'), '#A91B18', 10);
-  drawBars('incident-collision-chart', aggregateAccidentList('collision'), '#9333ea', 10);
-  drawBars('incident-vehicle-chart', aggregateAccidentList('vehicle'), '#669BBC', 10);
-  drawBars('incident-weather-chart', aggregateAccidentList('weather'), '#1e40af', 10);
-  drawBars('incident-roadtype-chart', aggregateAccidentList('road_type'), '#003049', 6);
-
-  // Vehicles & Dynamics Section (Section 03)
-  drawBars('vehicle-chart', aggregateAccidentList('vehicle'), '#669BBC', 8);
-  drawBars('incident-collision-chart-2', aggregateAccidentList('collision'), '#db2777', 8);
-  drawBars('cause-chart', aggregateAccidentList('cause'), '#A91B18', 8);
-  drawBars('incident-weather-chart-2', aggregateAccidentList('weather'), '#1e40af', 8);
+  const filteredRecords = getFilteredRecords();
+  renderSemanticCharts();
+  drawAnnualTrend(filteredRecords);
+  window.HighwayScatter?.render(document.getElementById('highway-scatter-chart'), filteredRecords, DATA?.roads || [], highlightRoadSegment);
 
   // Annual Summary Table
   const body = document.getElementById('incident-year-table');
   if (body) {
     body.replaceChildren();
-    for (const [year, data] of Object.entries(ACCIDENTS.years)) {
+    const filteredByYear = new Map();
+    for (const record of getFilteredRecords()) {
+      const year=String(record.year || 'ไม่ระบุ');
+      if(!filteredByYear.has(year))filteredByYear.set(year,{events:0,fatalities:0,serious:0,minor:0,injuries:0,vehicles:0,coordinates:0});
+      const row=filteredByYear.get(year);row.events++;row.fatalities+=Number(record.fatalities)||0;
+      row.serious+=Number(record.injuries_severe)||0;row.minor+=Number(record.injuries_minor)||0;
+      row.injuries+=Number(record.injuries)||0;if(isValue(record.vehicle))row.vehicles++;
+      if(isValue(record.latitude)&&isValue(record.longitude))row.coordinates++;
+    }
+    for (const [year, data] of [...filteredByYear.entries()].sort(([a],[b])=>a.localeCompare(b))) {
       const row = document.createElement('tr');
       if (selectedYear === year) row.className = 'selected-year-row';
+      const coordinatePct = data.events ? (data.coordinates / data.events) * 100 : 0;
       const values = [
-        `พ.ศ. ${Number(year) + 543}`,
+        year === 'ไม่ระบุ' ? year : `พ.ศ. ${Number(year) + 543}`,
         fmt.format(data.events),
         fmt.format(data.fatalities),
         fmt.format(data.serious),
         fmt.format(data.minor),
         fmt.format(data.injuries),
         fmt.format(data.vehicles),
-        `${fmt.format(data.coordinates)} (${((data.coordinates / data.events) * 100).toFixed(1)}%)`
+        `${fmt.format(data.coordinates)} (${coordinatePct.toFixed(1)}%)`
       ];
       for (const val of values) {
         const cell = document.createElement('td');
@@ -1168,6 +1418,30 @@ function updateAccidentDashboard() {
       body.append(row);
     }
   }
+}
+
+function drawAnnualTrend(records) {
+  const canvas=document.getElementById('annual-trend-chart'), s=resizeCanvas(canvas);
+  if(!s)return;
+  const {ctx,w,h}=s,theme=chartTheme();ctx.clearRect(0,0,w,h);
+  const years=['2023','2024','2025'],events=Object.fromEntries(years.map(y=>[y,0])),deaths=Object.fromEntries(years.map(y=>[y,0]));
+  for(const r of records){const y=String(r.year);if(!Object.hasOwn(events,y))continue;events[y]++;deaths[y]+=Math.max(0,Number(r.fatalities)||0);}
+  const maxE=Math.max(1,...Object.values(events)),maxD=Math.max(1,...Object.values(deaths));
+  const pad={l:56,r:58,t:22,b:42},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b, x=i=>pad.l+cw*i/Math.max(1,years.length-1);
+  ctx.font=`10px ${theme.font}`;ctx.lineWidth=1;ctx.strokeStyle=theme.grid;ctx.fillStyle=theme.textMuted;
+  for(let i=0;i<=4;i++){
+    const ratio=i/4,y=pad.t+ch*(1-ratio);ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();
+    ctx.textAlign='right';ctx.fillText(fmt.format(Math.round(maxE*ratio)),pad.l-8,y);
+    ctx.textAlign='left';ctx.fillText(fmt.format(Math.round(maxD*ratio)),w-pad.r+8,y);
+  }
+  years.forEach((year,i)=>{ctx.textAlign='center';ctx.fillStyle=theme.text;ctx.fillText(`พ.ศ. ${Number(year)+543}`,x(i),h-15);});
+  const series=[{values:events,max:maxE,color:'#C1121F'},{values:deaths,max:maxD,color:'#FF8C00'}];
+  for(const line of series){
+    ctx.beginPath();ctx.strokeStyle=line.color;ctx.lineWidth=3;ctx.lineJoin='round';
+    years.forEach((year,i)=>{const y=pad.t+ch*(1-line.values[year]/line.max);if(i===0)ctx.moveTo(x(i),y);else ctx.lineTo(x(i),y);});ctx.stroke();
+    years.forEach((year,i)=>{const y=pad.t+ch*(1-line.values[year]/line.max);ctx.beginPath();ctx.arc(x(i),y,5,0,Math.PI*2);ctx.fillStyle=line.color;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();});
+  }
+  if(canvas){canvas.title=years.map(y=>`พ.ศ. ${Number(y)+543}: ${fmt.format(events[y])} เหตุการณ์, ${fmt.format(deaths[y])} ผู้เสียชีวิต`).join('\n');}
 }
 
 function drawIncidentMonthly() {
@@ -1318,7 +1592,7 @@ function exportCsv() {
     'highway_code', 'highway_digits', 'digit_label', 'road_name', 'agency',
     'fatalities', 'injuries', 'injuries_severe', 'injuries_minor',
     'vehicle', 'cause', 'collision', 'weather', 'latitude', 'longitude',
-    'road_status', 'road_distance_m', 'matched_highway_code', 'traffic_aadt'
+    'road_status', 'road_distance_m', 'matched_highway_code'
   ];
 
   const csv = '\ufeff' + [cols.join(','), ...records.map(r => cols.map(k => csvEscape(r[k])).join(','))].join('\r\n');
@@ -1335,9 +1609,11 @@ function exportCsv() {
 /* Global Render Trigger */
 function render() {
   const records = getFilteredRecords();
+  if (pendingRoadHighlightId !== null && !records.some(record => normalizeRoadFeatureId(record.road_feature_id) === normalizeRoadFeatureId(pendingRoadHighlightId))) {
+    roadHighlightLayer?.clearLayers();
+    pendingRoadHighlightId = null;
+  }
   updateKpis(records);
-  drawTrend(records);
-  drawWeekday(records);
   drawWeekdayHour(records);
   updateQuality(records);
   updateAccidentDashboard();
@@ -1349,13 +1625,7 @@ function setupChartTooltips() {
   const tooltip = document.getElementById('canvas-tooltip');
   if (!tooltip) return;
 
-  const canvasIds = [
-    'trend-chart', 'weekday-chart', 'vehicle-chart', 'cause-chart',
-    'incident-collision-chart-2', 'incident-weather-chart-2',
-    'incident-month-chart', 'incident-hour-chart', 'incident-weekday-chart',
-    'incident-province-chart', 'incident-cause-chart', 'incident-collision-chart',
-    'incident-vehicle-chart', 'incident-weather-chart', 'incident-roadtype-chart'
-  ];
+  const canvasIds = ['weekday-hour-chart'];
 
   for (const id of canvasIds) {
     const canvas = document.getElementById(id);
@@ -1391,7 +1661,7 @@ function setupChartTooltips() {
 
 /* Navigation Scroll Spy */
 function setupQuickNav() {
-  const sections = ['overview', 'time', 'incidents', 'people', 'roads']
+  const sections = ['overview', 'time', 'people', 'roads']
     .map(id => document.getElementById(id))
     .filter(Boolean);
 
@@ -1470,11 +1740,9 @@ async function boot() {
     window.addEventListener('resize', () => render());
 
     // Fetch datasets in parallel
-    const [dashboardResponse, accidentResponse, geoResponse, roadsResponse] = await Promise.all([
+    const [dashboardResponse, accidentResponse] = await Promise.all([
       fetch('data/dashboard_data.json'),
-      fetch('data/accident_summary.json'),
-      fetch('data/provinces.geojson'),
-      fetch('data/roads.json')
+      fetch('data/accident_summary.json')
     ]);
 
     if (!dashboardResponse.ok) throw new Error(`โหลดข้อมูล dashboard_data.json ไม่สำเร็จ (${dashboardResponse.status})`);
@@ -1482,7 +1750,10 @@ async function boot() {
 
     DATA = await dashboardResponse.json();
     ACCIDENTS = await accidentResponse.json();
-    DATA.roads = roadsResponse.ok ? await roadsResponse.json() : [];
+    DATA.roads = [];
+    for (const record of DATA.records || []) {
+      for (const field of ['vehicle','cause','collision','weather']) record[field] = normalizeCategory(field, record[field]);
+    }
 
     const populate = (id, values, label) => {
       const select = document.getElementById(id);
@@ -1493,61 +1764,29 @@ async function boot() {
       select.setAttribute('aria-label', label);
     };
     populate('vehicle-filter', DATA.records.map(r=>r.vehicle), 'กรองตามประเภทยานพาหนะ');
-    populate('authority-filter', DATA.records.map(r=>r.agency), 'กรองตามหน่วยงานทาง');
     const rerender = () => render();
     document.getElementById('vehicle-filter')?.addEventListener('change', e => { selectedVehicle=e.target.value; rerender(); });
-    document.getElementById('authority-filter')?.addEventListener('change', e => { selectedAuthority=e.target.value; rerender(); });
     document.getElementById('fatality-filter')?.addEventListener('change', e => { selectedFatality=e.target.value; rerender(); });
+    document.getElementById('clear-semantic-filters')?.addEventListener('click', () => {
+      for (const key of Object.keys(semanticFilters)) semanticFilters[key] = 'all';
+      render();
+    });
     document.getElementById('road-search')?.addEventListener('input', rerender);
     document.getElementById('reset-filters')?.addEventListener('click', () => {
       selectedYear='all'; selectedRegion='all'; selectedProvince='all'; selectedHighwayDigits='all';
-      selectedVehicle='all'; selectedAuthority='all'; selectedFatality='all';
-      for (const id of ['year-filter','region-filter','province-filter','highway-digit-filter','vehicle-filter','authority-filter','fatality-filter']) {
+      selectedVehicle='all'; selectedFatality='all';
+      for (const key of Object.keys(semanticFilters)) semanticFilters[key] = 'all';
+      for (const id of ['year-filter','region-filter','province-filter','highway-digit-filter','vehicle-filter','fatality-filter']) {
         const el=document.getElementById(id); if (el) el.value='all';
       }
       const search=document.getElementById('road-search'); if(search) search.value='';
       syncFilterDropdowns(); updateMapView(true); render();
     });
 
-    if (geoResponse.ok) {
-      PROVINCES_GEO = await geoResponse.json();
-      // Normalize province names and use the official province-region attributes.
-      for (const feat of PROVINCES_GEO.features || []) {
-        const props = feat.properties || (feat.properties = {});
-        const pname = props.PROV_NAM_T || props.pro_th;
-        props.pro_th = pname === 'อยุธยา' ? 'พระนครศรีอยุธยา' : pname;
-        const regEn = props.REGION_6 || props.reg_th || props.reg_royin;
-        const regTh = {
-          North: 'ภาคเหนือ',
-          Northeast: 'ภาคตะวันออกเฉียงเหนือ',
-          Central: 'ภาคกลาง',
-          East: 'ภาคตะวันออก',
-          West: 'ภาคตะวันตก',
-          South: 'ภาคใต้'
-        }[regEn] || regEn;
-        props.reg_th = regTh;
-        if (props.pro_th && DATA.provinces) {
-          const geoLayer = L.geoJSON(feat);
-          const b = geoLayer.getBounds();
-          if (b.isValid()) {
-            const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-            DATA.provinces[props.pro_th] = {province: props.pro_th, region: regTh, bbox};
-            if (!DATA.regions[regTh]) DATA.regions[regTh] = {bbox};
-            else {
-              const old = DATA.regions[regTh].bbox;
-              DATA.regions[regTh].bbox = [Math.min(old[0],bbox[0]),Math.min(old[1],bbox[1]),Math.max(old[2],bbox[2]),Math.max(old[3],bbox[3])];
-            }
-          }
-        }
-      }
-      const provinceRegions = Object.fromEntries((PROVINCES_GEO.features || []).map(f => [f.properties?.pro_th, f.properties?.reg_th]));
-      for (const record of DATA.records || []) record.region = provinceRegions[record.province] || record.region || 'ไม่ระบุ';
-      for (const road of DATA.roads || []) road.region = road.region || provinceRegions[road.province] || 'ไม่ระบุ';
-    }
-
     syncFilterDropdowns();
     updateMapView(false);
     render();
+    setupLazyMapLoading();
   } catch (err) {
     const noteEl = document.getElementById('data-note');
     if (noteEl) {

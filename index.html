@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#080d19">
+  <meta name="theme-color" content="#F8FAED">
   <title>Thailand Road Safety Intelligence Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -38,14 +38,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"/>
           <polyline points="12 6 12 12 16 14"/>
-        </svg>
-      </a>
-
-      <a class="rail-link" href="#incidents" data-tooltip="สถิติอุบัติเหตุ (TRAMS)" title="สถิติอุบัติเหตุ">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/>
-          <line x1="12" y1="17" x2="12.01" y2="17"/>
         </svg>
       </a>
 
@@ -105,10 +97,6 @@
             <select id="vehicle-filter"><option value="all">ทุกประเภท</option></select>
           </div>
           <div class="filter-group">
-            <label class="filter-label" for="authority-filter">หน่วยงานทาง</label>
-            <select id="authority-filter"><option value="all">ทุกหน่วยงาน</option></select>
-          </div>
-          <div class="filter-group">
             <label class="filter-label" for="road-search">ค้นหารหัส/ชื่อสายทาง</label>
             <input id="road-search" type="search" placeholder="เช่น ทล. 1 หรือ ถนน..." autocomplete="off">
           </div>
@@ -130,13 +118,21 @@
       </header>
 
       <!-- Quick Section Jump Tabs -->
-      <nav class="quick-nav" aria-label="เมนูนำทางส่วนต่าง ๆ">
+      <!-- <nav class="quick-nav" aria-label="เมนูนำทางส่วนต่าง ๆ">
         <a class="quick-nav-pill active" href="#overview">◫ ภาพรวมอุบัติเหตุ</a>
         <a class="quick-nav-pill" href="#time">◷ มิติเวลา & เทศกาล</a>
-        <a class="quick-nav-pill" href="#incidents">⚑ สถิติเหตุการณ์ TRAMS</a>
         <a class="quick-nav-pill" href="#people">◉ พาหนะ & บริบทการชน</a>
         <a class="quick-nav-pill" href="#roads">⌖ แผนที่ GIS & เส้นทางหลวง</a>
-      </nav>
+      </nav> -->
+
+      <!-- 01 / SPATIAL ANALYSIS -->
+      <section class="section-heading" id="roads">
+        <div>
+          <div class="eyebrow">01 / Overview</div>
+          <h2>ภาพรวมอุบัติเหตุทางถนน</h2>
+        </div>
+        <span class="section-meta"></span>
+      </section>
 
       <!-- Executive Hero Counter Banner -->
       <section class="hero-counter" aria-live="polite" aria-label="จำนวนผู้เสียชีวิตตามปีที่เลือก">
@@ -145,418 +141,30 @@
         <span class="hero-counter-unit">รายผู้เสียชีวิต (ระบบ TRAMS กระทรวงคมนาคม)</span>
       </section>
 
-      <!-- Data Methodology Note -->
+      <section class="hero-counter hero-counter-injuries" aria-live="polite" aria-label="จำนวนผู้บาดเจ็บตามปีที่เลือก">
+        <h2 id="injury-counter-label">ผู้บาดเจ็บสะสมในชุดข้อมูล TRAMS ปี 2566–2568</h2>
+        <div class="hero-counter-number" id="injury-counter-number" aria-label="จำนวนผู้บาดเจ็บ">—</div>
+        <span class="hero-counter-unit">รายผู้บาดเจ็บ (บาดเจ็บสาหัส + บาดเจ็บเล็กน้อย · ระบบ TRAMS กระทรวงคมนาคม)</span>
+      </section>
+
       <section class="data-note" id="data-note">
         <div class="note-icon">ℹ</div>
         <div>
           <strong>ข้อมูลอุบัติเหตุทางถนนจาก TRAMS (พ.ศ. 2566–2568)</strong>
-          <p>นับหนึ่งเหตุการณ์ต่อ ACC_CODE และแยกเหตุการณ์ที่มีผู้เสียชีวิตออกจากจำนวนผู้เสียชีวิต แผนที่ใช้พิกัดที่บันทึกใน TRAMS; สถิติถนนและขอบเขตจังหวัดบางชั้นข้อมูลยังไม่ผ่านการเชื่อมโยงเพื่อเผยแพร่</p>
+          <p>นับหนึ่งเหตุการณ์ต่อ ACC_CODE และแยกเหตุการณ์ที่มีผู้เสียชีวิตออกจากจำนวนผู้เสียชีวิต แผนที่ใช้พิกัดที่บันทึกใน TRAMS และขอบเขตจังหวัดจริง; ยังไม่จัดอันดับความเสี่ยงรายช่วงทางเพราะการจับคู่ถนนกับเหตุการณ์ยังต้องตรวจสอบ</p>
         </div>
         <span class="note-count" id="incident-coverage">ตรวจสอบพิกัดจากต้นทาง</span>
       </section>
 
-      <!-- Overview KPI Cards -->
-      <section class="kpi-grid" id="overview">
-        <article class="kpi-card accent-coral">
-          <div class="kpi-label">ผู้เสียชีวิตสะสม</div>
-          <div class="kpi-value" id="kpi-deaths">—</div>
-          <div class="kpi-foot">พ.ศ. 2566–2568 (TRAMS)</div>
-          <div class="kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-            </svg>
-          </div>
-        </article>
-
-        <article class="kpi-card accent-blue">
-          <div class="kpi-label">เหตุการณ์อุบัติเหตุทั้งหมด</div>
-          <div class="kpi-value" id="kpi-events">—</div>
-          <div class="kpi-foot" id="kpi-events-sub">รายงานบนโครงข่ายทางหลวง</div>
-          <div class="kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-          </div>
-        </article>
-
-        <article class="kpi-card accent-green">
-          <div class="kpi-label">ผลจับคู่ถนนเดิมบางส่วน</div>
-          <div class="kpi-value" id="kpi-road-match">—</div>
-          <div class="kpi-foot">มีเฉพาะ subset เดิม ยังไม่ใช้จัดอันดับถนน</div>
-          <div class="kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="7 17 17 7"/>
-              <polyline points="7 7 17 7 17 17"/>
-            </svg>
-          </div>
-        </article>
-
-        <article class="kpi-card accent-violet">
-          <div class="kpi-label">ผู้บาดเจ็บรวมสะสม</div>
-          <div class="kpi-value" id="kpi-injuries">—</div>
-          <div class="kpi-foot" id="kpi-injuries-sub">บาดเจ็บสาหัส + เล็กน้อย</div>
-          <div class="kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="m4.93 4.93 4.24 4.24"/>
-              <path d="m14.83 9.17 4.24-4.24"/>
-              <path d="m14.83 14.83 4.24 4.24"/>
-              <path d="m9.17 14.83-4.24 4.24"/>
-            </svg>
-          </div>
-        </article>
-      </section>
-
-      <!-- 01 / TEMPORAL SIGNALS -->
-      <section class="section-heading" id="time">
-        <div>
-          <div class="eyebrow">01 / TEMPORAL SIGNALS</div>
-          <h2>รูปแบบวันเวลาเกิดเหตุ</h2>
-        </div>
-        <span class="section-meta">อิงวันและเวลาที่ระบุใน TRAMS</span>
-      </section>
-
-      <section class="two-col temporal-grid">
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>แนวโน้มอุบัติเหตุรายเดือน</h3>
-              <p>นับเหตุการณ์จากวันที่เกิดเหตุ เปรียบเทียบตามปี พ.ศ.</p>
-            </div>
-            <span class="tag tag-muted">จำนวนเหตุการณ์</span>
-          </div>
-          <div class="chart-area">
-            <canvas id="trend-chart" aria-label="กราฟแนวโน้มอุบัติเหตุรายเดือน"></canvas>
-          </div>
-          <div class="legend-row" id="trend-legend"></div>
-        </article>
-
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>อุบัติเหตุตามวันในสัปดาห์</h3>
-              <p>จัดวันจากวันที่เกิดเหตุในข้อมูล TRAMS</p>
-            </div>
-            <span class="tag tag-muted">จำนวนเหตุการณ์</span>
-          </div>
-          <div class="chart-area">
-            <canvas id="weekday-chart" aria-label="กราฟอุบัติเหตุตามวันในสัปดาห์"></canvas>
-          </div>
-        </article>
-
-        <article class="panel chart-panel festival-panel">
-          <div class="panel-head">
-            <div>
-              <h3>วันในสัปดาห์ × ชั่วโมง</h3>
-              <p>จำนวนเหตุการณ์ตามวันและช่วงเวลาเกิดเหตุ (ช่วงละ 2 ชั่วโมง)</p>
-            </div>
-            <span class="tag tag-muted">ความถี่</span>
-          </div>
-          <div class="chart-area">
-            <canvas id="weekday-hour-chart" aria-label="ตารางความถี่อุบัติเหตุตามวันในสัปดาห์และช่วงเวลา"></canvas>
-          </div>
-        </article>
-      </section>
-
-      <!-- 02 / CRASH EVENTS · TRAMS -->
-      <section class="section-heading" id="incidents">
-        <div>
-          <div class="eyebrow">02 / CRASH EVENTS · TRAMS</div>
-          <h2>สถิติอุบัติเหตุและบริบทการชนบนทางหลวง</h2>
-        </div>
-        <span class="section-meta">เหตุการณ์บนทางหลวง · ทางหลวงชนบท · ทางด่วน · พ.ศ. 2566–2568</span>
-      </section>
-
-      <section class="incident-intro">
-        <div>
-          <strong>ข้อมูลอุบัติเหตุจากกระทรวงคมนาคม (ระบบ TRAMS)</strong>
-          <span>ใช้ปีเกิดเหตุเดียวกับตัวกรองด้านบน · แสดงจำนวนดิบจากรายงานการเกิดเหตุบนสายทาง</span>
-        </div>
-        <a class="download-link" href="dataset/accidents_2023_2025.csv" download>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          <span>ดาวน์โหลดข้อมูลเหตุการณ์ CSV</span>
-        </a>
-      </section>
-
-      <!-- TRAMS Incident KPIs -->
-      <section class="kpi-grid incident-kpis" aria-label="สรุปเหตุการณ์จาก TRAMS">
-        <article class="kpi-card accent-blue">
-          <div class="kpi-label">เหตุการณ์อุบัติเหตุ</div>
-          <div class="kpi-value" id="incident-events">—</div>
-          <div class="kpi-foot">จำนวนระเบียนเหตุการณ์ TRAMS</div>
-          <div class="kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.5 2.8C2.1 11 2 11.5 2 12v4c0 .6.4 1 1 1h2"/>
-              <circle cx="7" cy="17" r="2"/>
-              <circle cx="17" cy="17" r="2"/>
-            </svg>
-          </div>
-        </article>
-
-        <article class="kpi-card accent-coral">
-          <div class="kpi-label">ผู้เสียชีวิตในระเบียน TRAMS</div>
-          <div class="kpi-value" id="incident-fatalities">—</div>
-          <div class="kpi-foot"><span id="incident-fatal-events">—</span> เหตุการณ์มีผู้เสียชีวิต · นับหนึ่ง ACC_CODE ต่อเหตุการณ์</div>
-          <div class="kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-          </div>
-        </article>
-
-        <article class="kpi-card accent-amber">
-          <div class="kpi-label">บาดเจ็บสาหัส</div>
-          <div class="kpi-value" id="incident-serious">—</div>
-          <div class="kpi-foot">ตามช่องข้อมูลใน TRAMS</div>
-          <div class="kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-          </div>
-        </article>
-
-        <article class="kpi-card accent-green">
-          <div class="kpi-label">บาดเจ็บรวมทั้งหมด</div>
-          <div class="kpi-value" id="incident-injuries">—</div>
-          <div class="kpi-foot">บาดเจ็บสาหัสและเล็กน้อยตามรายงาน</div>
-          <div class="kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
-            </svg>
-          </div>
-        </article>
-      </section>
-
-      <!-- Incident Visualizations Grid -->
-      <section class="two-col incident-grid">
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>เหตุการณ์รายเดือน</h3>
-              <p>จัดตามวันที่เกิดเหตุ · เปรียบเทียบปีเมื่อเลือกทุกปี</p>
-            </div>
-            <span class="tag tag-muted">TRAMS</span>
-          </div>
-          <div class="chart-area">
-            <canvas id="incident-month-chart" aria-label="แนวโน้มอุบัติเหตุรายเดือน"></canvas>
-          </div>
-          <div class="legend-row" id="incident-month-legend"></div>
-        </article>
-
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>ช่วงเวลาเกิดเหตุ (Time of Day)</h3>
-              <p>แบ่งช่วงละ 2 ชั่วโมง ตามเวลาที่บันทึกเหตุการณ์</p>
-            </div>
-            <span class="tag tag-muted">2 ชม./ช่วง</span>
-          </div>
-          <div class="chart-area">
-            <canvas id="incident-hour-chart" aria-label="จำนวนอุบัติเหตุตามช่วงเวลาเกิดเหตุ"></canvas>
-          </div>
-        </article>
-
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>เหตุการณ์ตามวันในสัปดาห์</h3>
-              <p>สกัดจากวันที่เกิดเหตุในระบบ TRAMS</p>
-            </div>
-            <span class="tag tag-muted">วันเกิดเหตุ</span>
-          </div>
-          <div class="chart-area">
-            <canvas id="incident-weekday-chart" aria-label="จำนวนอุบัติเหตุตามวันในสัปดาห์"></canvas>
-          </div>
-        </article>
-
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>จังหวัดที่เกิดเหตุสูงสุด</h3>
-              <p>จัดอันดับตามจำนวนเหตุการณ์ที่เกิดขึ้นในพื้นที่</p>
-            </div>
-            <span class="tag tag-muted">Top 12 จังหวัด</span>
-          </div>
-          <div class="chart-area tall-chart">
-            <canvas id="incident-province-chart" aria-label="จังหวัดที่เกิดอุบัติเหตุมากที่สุด"></canvas>
-          </div>
-        </article>
-
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>มูลเหตุสันนิษฐานของอุบัติเหตุ</h3>
-              <p>ปัจจัยต้นเหตุหลักที่ระบุในรายงานเจ้าหน้าที่</p>
-            </div>
-            <span class="tag tag-muted">พฤติกรรม & ปัจจัย</span>
-          </div>
-          <div class="chart-area tall-chart">
-            <canvas id="incident-cause-chart" aria-label="มูลเหตุสันนิษฐานของอุบัติเหตุ"></canvas>
-          </div>
-        </article>
-
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>ลักษณะการเกิดเหตุ</h3>
-              <p>รูปแบบการชน การเสียหลัก หรือการพลิกคว่ำ</p>
-            </div>
-            <span class="tag tag-muted">รูปแบบการชน</span>
-          </div>
-          <div class="chart-area tall-chart">
-            <canvas id="incident-collision-chart" aria-label="ลักษณะการเกิดเหตุที่พบบ่อย"></canvas>
-          </div>
-        </article>
-
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>ประเภทพาหนะคันที่ 1</h3>
-              <p>พาหนะหลักที่ระบุในรายงานเหตุการณ์</p>
-            </div>
-            <span class="tag tag-muted">ประเภทยานพาหนะ</span>
-          </div>
-          <div class="chart-area tall-chart">
-            <canvas id="incident-vehicle-chart" aria-label="พาหนะหลักที่เกิดอุบัติเหตุ"></canvas>
-          </div>
-        </article>
-
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>สภาพอากาศขณะเกิดเหตุ</h3>
-              <p>สภาพแวดล้อมและทัศนวิสัยตามรายงาน</p>
-            </div>
-            <span class="tag tag-muted">สภาพแวดล้อม</span>
-          </div>
-          <div class="chart-area tall-chart">
-            <canvas id="incident-weather-chart" aria-label="จำนวนอุบัติเหตุตามสภาพอากาศ"></canvas>
-          </div>
-        </article>
-
-        <article class="panel chart-panel" style="grid-column: 1 / -1;">
-          <div class="panel-head">
-            <div>
-              <h3>ประเภทโครงข่ายถนน</h3>
-              <p>หน่วยงานที่รับผิดชอบสายทางตามข้อมูลต้นทาง (ทางหลวง, ทางหลวงชนบท, ทางด่วน)</p>
-            </div>
-            <span class="tag tag-muted">หน่วยงานผู้รับผิดชอบ</span>
-          </div>
-          <div class="chart-area" style="height: 220px;">
-            <canvas id="incident-roadtype-chart" aria-label="จำนวนอุบัติเหตุตามประเภทโครงข่ายถนน"></canvas>
-          </div>
-        </article>
-      </section>
-
-      <!-- Multi-Year Summary Table (TRAMS) -->
-      <section class="panel incident-table-panel">
-        <div class="panel-head">
-          <div>
-            <h3>ตารางสรุปสถิติอุบัติเหตุและผู้เสียชีวิตรายปี (TRAMS)</h3>
-            <p>สถิติจากระบบบูรณาการรายงานอุบัติเหตุบนสายทาง กระทรวงคมนาคม พ.ศ. 2566–2568</p>
-          </div>
-          <span class="tag tag-accent">ข้อมูลจริงระดับเหตุการณ์</span>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ปี พ.ศ.</th>
-                <th>เหตุการณ์ทั้งหมด</th>
-                <th>ผู้เสียชีวิต</th>
-                <th>บาดเจ็บสาหัส</th>
-                <th>บาดเจ็บเล็กน้อย</th>
-                <th>รวมผู้บาดเจ็บ</th>
-                <th>รถที่เกิดเหตุ</th>
-                <th>เหตุการณ์มีพิกัด</th>
-              </tr>
-            </thead>
-            <tbody id="incident-year-table"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- 03 / VEHICLES & DYNAMICS -->
-      <section class="section-heading" id="people">
-        <div>
-          <div class="eyebrow">03 / VEHICLES & CRASH DYNAMICS</div>
-          <h2>พาหนะและลักษณะการเกิดอุบัติเหตุ</h2>
-        </div>
-        <span class="section-meta">จำแนกตามข้อมูลเหตุการณ์จริง TRAMS (พ.ศ. 2566–2568)</span>
-      </section>
-
-      <section class="two-col profile-grid">
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>ประเภทยานพาหนะที่เกิดเหตุ (รถคันที่ 1)</h3>
-              <p>จัดอันดับประเภทยานพาหนะหลักที่ประสบเหตุ</p>
-            </div>
-            <span class="tag tag-muted">ประเภทยานพาหนะ</span>
-          </div>
-          <div class="chart-area tall-chart">
-            <canvas id="vehicle-chart" aria-label="กราฟประเภทยานพาหนะ"></canvas>
-          </div>
-        </article>
-
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>ลักษณะการเกิดเหตุ (Collision Type)</h3>
-              <p>รูปแบบการชนหรืออุบัติเหตุที่เกิดขึ้นบนสายทาง</p>
-            </div>
-            <span class="tag tag-muted">ลักษณะเหตุการณ์</span>
-          </div>
-          <div class="chart-area tall-chart">
-            <canvas id="incident-collision-chart-2" aria-label="กราฟลักษณะการเกิดเหตุ"></canvas>
-          </div>
-        </article>
-
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>มูลเหตุสันนิษฐานของการเกิดเหตุ</h3>
-              <p>สาเหตุหลักเบื้องต้นที่เจ้าหน้าที่ประเมิน</p>
-            </div>
-            <span class="tag tag-muted">มูลเหตุสันนิษฐาน</span>
-          </div>
-          <div class="chart-area tall-chart">
-            <canvas id="cause-chart" aria-label="กราฟมูลเหตุสันนิษฐาน"></canvas>
-          </div>
-        </article>
-
-        <article class="panel chart-panel">
-          <div class="panel-head">
-            <div>
-              <h3>สภาพอากาศขณะเกิดเหตุ</h3>
-              <p>สถิติอุบัติเหตุจำแนกตามสภาพอากาศในพื้นที่</p>
-            </div>
-            <span class="tag tag-muted">สภาพอากาศ</span>
-          </div>
-          <div class="chart-area tall-chart">
-            <canvas id="incident-weather-chart-2" aria-label="กราฟสภาพอากาศ"></canvas>
-          </div>
-        </article>
-      </section>
-
-      <!-- 04 / SPATIAL ANALYSIS -->
+      <!-- 02 / SPATIAL ANALYSIS -->
       <section class="section-heading" id="roads">
         <div>
-          <div class="eyebrow">04 / SPATIAL ANALYSIS</div>
+          <div class="eyebrow">02 / SPATIAL ANALYSIS</div>
           <h2>แผนที่อุบัติเหตุและเหตุการณ์เสียชีวิต (GIS)</h2>
         </div>
         <span class="section-meta">กรองพื้นที่: ประเทศไทย → ภาค → จังหวัด → ประเภทเลขทางหลวง · ขอบเขตและพิกัดจริง</span>
       </section>
+
 
       <!-- Interactive Leaflet Map Panel -->
       <section class="panel map-panel">
@@ -644,6 +252,10 @@
               <span class="legend-item"><i class="map-dot map-dot-fatal"></i> เหตุการณ์มีผู้เสียชีวิต</span>
               <span class="legend-item"><i class="map-dot map-dot-accident"></i> เหตุการณ์ไม่มีผู้เสียชีวิต</span>
               <span class="legend-item"><i class="boundary-legend"></i> ขอบเขตจังหวัด / ภาค</span>
+              <span class="legend-item"><i class="choropleth-swatch" style="background:#A91B18"></i> สูงมาก</span>
+              <span class="legend-item"><i class="choropleth-swatch" style="background:#FF8C00"></i> สูง</span>
+              <span class="legend-item"><i class="choropleth-swatch" style="background:#FFD700"></i> ปานกลาง</span>
+              <span class="legend-item"><i class="choropleth-swatch" style="background:#2E7D32"></i> ต่ำ / ไม่มีเหตุการณ์</span>
             </div>
           </div>
         </div>
@@ -653,6 +265,131 @@
           <span>ภาพถ่ายและป้ายถนน © Esri, Maxar, Earthstar Geographics · ขอบเขตจังหวัด © DDPM · ซูมและเลื่อนได้อิสระ</span>
         </div>
       </section>
+      <!--
+
+      <section class="kpi-grid" id="overview">
+        <article class="kpi-card accent-coral">
+          <div class="kpi-label">ผู้เสียชีวิตสะสม</div>
+          <div class="kpi-value" id="kpi-deaths">—</div>
+          <div class="kpi-foot">พ.ศ. 2566–2568 (TRAMS)</div>
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+          </div>
+        </article>
+
+        <article class="kpi-card accent-blue">
+          <div class="kpi-label">เหตุการณ์อุบัติเหตุทั้งหมด</div>
+          <div class="kpi-value" id="kpi-events">—</div>
+          <div class="kpi-foot" id="kpi-events-sub">รายงานบนโครงข่ายทางหลวง</div>
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+        </article>
+
+        <article class="kpi-card accent-green">
+          <div class="kpi-label">ผลจับคู่ถนนเดิมบางส่วน</div>
+          <div class="kpi-value" id="kpi-road-match">—</div>
+          <div class="kpi-foot">มีเฉพาะ subset เดิม ยังไม่ใช้จัดอันดับถนน</div>
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="7 17 17 7"/>
+              <polyline points="7 7 17 7 17 17"/>
+            </svg>
+          </div>
+        </article>
+
+        <article class="kpi-card accent-injury">
+          <div class="kpi-label">ผู้บาดเจ็บรวมสะสม</div>
+          <div class="kpi-value" id="kpi-injuries">—</div>
+          <div class="kpi-foot" id="kpi-injuries-sub">บาดเจ็บสาหัส + เล็กน้อย</div>
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="m4.93 4.93 4.24 4.24"/>
+              <path d="m14.83 9.17 4.24-4.24"/>
+              <path d="m14.83 14.83 4.24 4.24"/>
+              <path d="m9.17 14.83-4.24 4.24"/>
+            </svg>
+          </div>
+        </article>
+      </section> -->
+
+      <!-- 03 / TEMPORAL SIGNALS -->
+      <section class="section-heading" id="time">
+        <div><div class="eyebrow">03 / TEMPORAL SIGNALS</div><h2>วันในสัปดาห์ × ชั่วโมงเกิดเหตุ</h2></div>
+        <span class="section-meta">นับเหตุการณ์ตามวันและชั่วโมงเต็ม 24 ชั่วโมง · มีผลรวมรายวันและรายชั่วโมง</span>
+      </section>
+      <section class="panel chart-panel temporal-heatmap-panel">
+        <div class="panel-head"><div><h3>Heatmap วันในสัปดาห์ × ชั่วโมง</h3><p>โทนสีเหลือง → ส้ม → แดง แสดงจำนวนเหตุการณ์จากน้อยไปมาก</p></div><span class="tag tag-muted">24 ชั่วโมง + ยอดรวม</span></div>
+        <div class="chart-area heatmap-area"><canvas id="weekday-hour-chart" aria-label="ตารางความถี่อุบัติเหตุตามวันในสัปดาห์และชั่วโมงเต็ม 24 ชั่วโมง"></canvas></div>
+      </section>
+
+      <!-- Multi-Year Summary Table (TRAMS) -->
+      <section class="panel incident-table-panel">
+        <div class="panel-head">
+          <div>
+            <h3>ตารางสรุปสถิติอุบัติเหตุและผู้เสียชีวิตรายปี (TRAMS)</h3>
+            <p>สถิติจากระบบบูรณาการรายงานอุบัติเหตุบนสายทาง กระทรวงคมนาคม พ.ศ. 2566–2568</p>
+          </div>
+          <span class="tag tag-accent">ข้อมูลจริงระดับเหตุการณ์</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ปี พ.ศ.</th>
+                <th>เหตุการณ์ทั้งหมด</th>
+                <th>ผู้เสียชีวิต</th>
+                <th>บาดเจ็บสาหัส</th>
+                <th>บาดเจ็บเล็กน้อย</th>
+                <th>รวมผู้บาดเจ็บ</th>
+                <th>รถที่เกิดเหตุ</th>
+                <th>เหตุการณ์มีพิกัด</th>
+              </tr>
+            </thead>
+            <tbody id="incident-year-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 03 / VEHICLES & DYNAMICS -->
+      <section class="section-heading" id="people">
+        <div>
+          <div class="eyebrow">04 / VEHICLES & CRASH DYNAMICS</div>
+          <h2>พาหนะและลักษณะการเกิดอุบัติเหตุ</h2>
+        </div>
+        <span class="section-meta">จำแนกตามข้อมูลเหตุการณ์จริง TRAMS (พ.ศ. 2566–2568)</span>
+      </section>
+
+      <section class="two-col profile-grid semantic-grid">
+        <article class="panel chart-panel semantic-panel" data-semantic="vehicle">
+          <div class="panel-head"><div><h3>ประเภทยานพาหนะ</h3><p>สัดส่วนเหตุการณ์หลังจัดกลุ่มชื่อใกล้กัน · คลิกเพื่อกรองร่วม</p></div><span class="tag tag-muted">Pie chart</span></div>
+          <div class="semantic-chart-area" id="semantic-vehicle" aria-label="สัดส่วนประเภทยานพาหนะ"></div>
+        </article>
+        <article class="panel chart-panel">
+          <div class="panel-head"><div><h3>ประเภทโครงข่ายถนน</h3><p>จำแนกตามประเภทที่รายงานในข้อมูลต้นทาง</p></div><span class="tag tag-muted">Donut chart</span></div>
+          <div class="semantic-chart-area" id="semantic-roadtype" aria-label="ประเภทโครงข่ายถนน"></div>
+        </article>
+        <article class="panel chart-panel semantic-panel" data-semantic="cause">
+          <div class="panel-head"><div><h3>มูลเหตุสันนิษฐาน</h3><p>รวมคำที่มีความหมายใกล้กัน · คลิกเพื่อกรองร่วม</p></div><span class="tag tag-muted">Treemap</span></div>
+          <div class="semantic-chart-area treemap-area" id="semantic-cause" aria-label="มูลเหตุสันนิษฐาน"></div>
+        </article>
+        <article class="panel chart-panel semantic-panel" data-semantic="collision">
+          <div class="panel-head"><div><h3>ลักษณะการเกิดเหตุ</h3><p>แสดงจำนวนเต็มบนบล็อก · คลิกเพื่อกรองร่วม</p></div><span class="tag tag-muted">Treemap</span></div>
+          <div class="semantic-chart-area treemap-area" id="semantic-collision" aria-label="ลักษณะการเกิดเหตุ"></div>
+        </article>
+        <article class="panel chart-panel semantic-panel" data-semantic="weather">
+          <div class="panel-head"><div><h3>สภาพอากาศขณะเกิดเหตุ</h3><p>วางเมาส์เพื่อดูจำนวนและสัดส่วน · คลิกเพื่อกรองร่วม</p></div><span class="tag tag-muted">สภาพแวดล้อม</span></div>
+          <div class="semantic-chart-area weather-area" id="semantic-weather" aria-label="สภาพอากาศ"></div>
+        </article>
+      </section>
+      <div class="semantic-filter-status" id="semantic-filter-status" hidden><span id="semantic-filter-label"></span><button class="small-btn" id="clear-semantic-filters" type="button">ล้างตัวกรองกราฟ</button></div>
 
       <!-- Top 10 Dangerous Highway Segments -->
       <section class="panel hotspots-panel">
@@ -685,9 +422,12 @@
         </article>
       </section>
 
+
+      
+
       <!-- Footer -->
       <footer class="footer">
-        <span>ข้อมูลต้นทางหลัก: ระบบ TRAMS กระทรวงคมนาคม · ชุดถนน/AADT/ขอบเขตยังไม่เชื่อมเข้ากับสถิติระดับเหตุการณ์</span>
+        <span>ข้อมูลต้นทางหลัก: ระบบ TRAMS กระทรวงคมนาคม · เส้นทางเป็นชั้นอ้างอิง และยังไม่ใช้จัดอันดับความเสี่ยงรายช่วงทาง</span>
         <span>Dashboard ระบบสารสนเทศความปลอดภัยทางถนนประเทศไทย</span>
       </footer>
     </main>
