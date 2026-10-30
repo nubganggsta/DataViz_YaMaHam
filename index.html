@@ -251,9 +251,10 @@
 
             <div class="filter-control-item">
               <label for="map-point-metric">ตัวเลขบนจุดแผนที่</label>
-              <select id="map-point-metric"><option value="events">จำนวนเหตุการณ์ (ครั้ง)</option><option value="injuries">ผู้บาดเจ็บรวม (ราย)</option><option value="fatalities">ผู้เสียชีวิต (ราย)</option></select>
+              <select id="map-point-metric"><option value="fatalities">ผู้เสียชีวิต (ราย)</option><option value="injuries">ผู้บาดเจ็บรวม (ราย)</option></select>
             </div>
             <div class="map-layer-toggles">
+              <label><input type="checkbox" id="show-map-numbers" checked> แสดงตัวเลขบนจุด</label>
               <label><input type="checkbox" id="show-roads" checked> ทางหลวงแผ่นดินและทางหลวงชนบท</label>
               <label><input type="checkbox" id="show-points" checked> พิกัดอุบัติเหตุ</label>
               <label><input type="checkbox" id="show-boundary" checked> ขอบเขตพื้นที่</label>
@@ -269,7 +270,7 @@
           </div>
         </div>
 
-        <p class="chart-footnote" id="map-point-metric-note" aria-live="polite">ตัวเลขบนจุดและกลุ่มจุด = จำนวนเหตุการณ์ (ครั้ง) ตามตัวกรอง</p>
+        <p class="chart-footnote" id="map-point-metric-note" aria-live="polite">ตัวเลขบนจุดและกลุ่มจุด = ผู้เสียชีวิต (ราย) ตามตัวกรอง · เปิด–ปิดตัวเลขได้</p>
         <!-- Filter Status Bar -->
         <div class="filter-status-bar" id="filter-status-bar">
           <div class="active-chips" id="active-chips"></div>

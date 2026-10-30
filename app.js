@@ -70,10 +70,10 @@ let roadHighlightLayer = null;
 let pointLayer = null;
 let boundaryLayer = null;
 let hasMarkerCluster = false;
-let selectedMapMetric = 'events';
+let selectedMapMetric = 'fatalities';
+let showMapNumbers = true;
 let mapIncidentMarkers = [];
 const MAP_POINT_METRICS = {
-  events:{label:'จำนวนเหตุการณ์',unit:'ครั้ง',color:'#003049'},
   injuries:{label:'ผู้บาดเจ็บ',unit:'ราย',color:'#D97706'},
   fatalities:{label:'ผู้เสียชีวิต',unit:'ราย',color:'#C1121F'}
 };
@@ -86,16 +86,19 @@ function summarizeMapPoints(records) {
 
 function mapPointIcon(records,cluster=false) {
   const totals=summarizeMapPoints(records),metric=MAP_POINT_METRICS[selectedMapMetric];
-  const value=totals[selectedMapMetric],width=Math.max(cluster?48:32,fmt.format(value).length*8+18);
-  return L.divIcon({className:'map-value-icon',html:`<div class="map-value-badge ${cluster?'is-cluster':''}" style="--point-color:${value===0?'#64748b':metric.color}" title="${metric.label} ${fmt.format(value)} ${metric.unit} จาก ${fmt.format(totals.events)} เหตุการณ์"><strong>${fmt.format(value)}</strong><small>${metric.unit}</small></div>`,iconSize:[width,cluster?48:34],iconAnchor:[width/2,cluster?24:17]});
+  const value=totals[selectedMapMetric],width=showMapNumbers?Math.max(cluster?48:32,fmt.format(value).length*8+18):(cluster?24:10);
+  const height=showMapNumbers?(cluster?48:34):(cluster?24:10);
+  const label=showMapNumbers?`${metric.label} ${fmt.format(value)} ${metric.unit}`:`พิกัด${metric.label} (ซ่อนตัวเลข)`;
+  const content=showMapNumbers?`<strong>${fmt.format(value)}</strong><small>${metric.unit}</small>`:'';
+  return L.divIcon({className:'map-value-icon',html:`<div class="map-value-badge ${cluster?'is-cluster':''}" style="--point-color:${value===0?'#64748b':metric.color}" title="${label}">${content}</div>`,iconSize:[width,height],iconAnchor:[width/2,height/2]});
 }
 
 function updateMapPointMetric(value) {
-  selectedMapMetric=MAP_POINT_METRICS[value]?value:'events';
+  selectedMapMetric=MAP_POINT_METRICS[value]?value:'fatalities';
   for(const marker of mapIncidentMarkers)marker.setIcon(mapPointIcon([marker.options.accidentRecord]));
   pointLayer?.refreshClusters?.();
   const metric=MAP_POINT_METRICS[selectedMapMetric];
-  setText('map-point-metric-note',`ตัวเลขบนจุดและกลุ่มจุด = ${metric.label} (${metric.unit}) ตามตัวกรอง · คลิกกลุ่มเพื่อซูม และคลิกจุดเพื่อดูรายละเอียด · 0 หมายถึงไม่มีผู้สูญเสียประเภทที่เลือกในจุดนั้น`);
+  setText('map-point-metric-note',showMapNumbers?`ตัวเลขบนจุดและกลุ่มจุด = ${metric.label} (${metric.unit}) ตามตัวกรอง${selectedMapMetric==='injuries'?' · รวมบาดเจ็บสาหัสและเล็กน้อย':''} · 0 หมายถึงไม่มีผู้สูญเสียประเภทที่เลือกในจุดนั้น`:`ซ่อนตัวเลขบนจุดแล้ว · ยังคงแสดงพิกัดและกลุ่มจุด คลิกเพื่อดูรายละเอียดได้`);
 }
 
 /* Utility Helpers */
@@ -969,6 +972,7 @@ function setupMap() {
   document.getElementById('show-points')?.addEventListener('change', () => drawMap(false));
   document.getElementById('show-boundary')?.addEventListener('change', () => drawMap(false));
   document.getElementById('map-point-metric')?.addEventListener('change',e=>updateMapPointMetric(e.target.value));
+  document.getElementById('show-map-numbers')?.addEventListener('change',e=>{showMapNumbers=e.target.checked;updateMapPointMetric(selectedMapMetric);});
   updateMapPointMetric(selectedMapMetric);
 
   // Region Filter Change
