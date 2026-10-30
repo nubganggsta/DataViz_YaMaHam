@@ -196,17 +196,6 @@
       </section>
 
       <!-- 02 / SPATIAL ANALYSIS -->
-      <section class="panel chart-panel scatter-panel" aria-labelledby="highway-scatter-title">
-        <div class="panel-head"><div><h3 id="highway-scatter-title">ความสัมพันธ์ระหว่างจำนวนอุบัติเหตุกับจำนวนผู้เสียชีวิต รายช่วงทางหลวง</h3><p>หนึ่งจุดต่อ Geometry ถนนที่จับคู่ได้ภายใน 100 เมตร ใช้ตัวกรองเดียวกับ dashboard · จำนวนดิบไม่ใช่อัตราความเสี่ยง</p></div></div>
-        <p class="chart-footnote" id="scatter-coverage" aria-live="polite"></p>
-        <div class="scatter-legend" id="scatter-legend"></div>
-        <label for="scatter-segment-picker">เลือกจุดที่ซ้อนกัน / เลือก Geometry เพื่อดูรายละเอียด</label>
-        <select id="scatter-segment-picker" aria-label="เลือก Geometry ใน Scatter Plot" style="width:100%;max-width:100%;margin:8px 0;padding:8px;background:var(--bg-surface);color:var(--ink-primary);border:1px solid var(--border-strong);border-radius:8px"></select>
-        <div class="chart-area scatter-chart-area"><canvas id="highway-scatter-chart" role="img" aria-label="จำนวนอุบัติเหตุกับผู้เสียชีวิตต่อ Geometry ถนน"></canvas><div class="scatter-tooltip" id="scatter-tooltip" hidden></div></div>
-        <p class="chart-footnote">ใช้เฉพาะเหตุการณ์ที่จับคู่ถนนได้ ไม่ครอบคลุมทุกเหตุการณ์ ช่วงทางอ้างอิงตามหน่วย Geometry ของ DOH/DRR ไม่ใช่ช่วง กม. ที่กำหนดใหม่ · กรณีเส้นทางผ่านหลายภาคใช้สีหมวดหลายภาค · คลิกจุดเพื่อดูรายละเอียดและไปยังเส้นถนนที่มี ID ตรงกัน</p>
-        <div class="scatter-selection" id="scatter-selection" aria-live="polite"></div>
-      </section>
-
       <section class="section-heading" id="roads">
         <div>
           <div class="eyebrow">02 / SPATIAL ANALYSIS</div>
@@ -463,7 +452,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.4/dist/leaflet.markercluster.js"></script>
   <script src="overview-analytics.js"></script>
-  <script src="highway-scatter.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

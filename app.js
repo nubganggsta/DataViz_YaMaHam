@@ -832,8 +832,8 @@ async function loadMapAssets() {
 }
 
 function normalizeRoadFeatureId(value) {
-  const ref = String(value ?? '').trim();
-  return /^\d+(?:\.0+)?$/.test(ref) ? String(Number(ref)) : ref;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? String(Math.trunc(numeric)) : String(value ?? '').trim();
 }
 
 function highlightRoadSegment(featureId) {
@@ -845,11 +845,11 @@ function highlightRoadSegment(featureId) {
   const targetId = normalizeRoadFeatureId(featureId);
   const road = (DATA?.roads || []).find(item => normalizeRoadFeatureId(item.id) === targetId);
   const summary = document.getElementById('scatter-selection');
-  roadHighlightLayer?.clearLayers();
   if (!road || !roadHighlightLayer || !leafletMap) {
     if (summary) summary.insertAdjacentHTML('beforeend', '<div class="scatter-map-note">ไม่พบ Geometry ของช่วงทางนี้ในชั้นแผนที่</div>');
     return;
   }
+  roadHighlightLayer.clearLayers();
   const highlightLines = [];
   for (const line of road.lines || []) {
     const polyline = L.polyline(line.map(([lon,lat])=>[lat,lon]), {
@@ -864,8 +864,6 @@ function highlightRoadSegment(featureId) {
     return;
   }
   const bounds = roadHighlightLayer.getBounds();
-  document.getElementById('road-map')?.scrollIntoView({behavior:'smooth',block:'center'});
-  leafletMap.invalidateSize();
   if (bounds.isValid()) leafletMap.fitBounds(bounds, {padding:[48,48], maxZoom:14, animate:true});
   highlightLines[0].openPopup();
 }
