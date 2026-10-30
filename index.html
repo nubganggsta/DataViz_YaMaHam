@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="vendor/markercluster/MarkerCluster.css">
   <link rel="stylesheet" href="vendor/markercluster/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="styles.css?v=20261030-density-2">
+  <link rel="stylesheet" href="styles.css?v=20261030-split-trends">
 </head>
 <body data-theme="light">
   <div class="app-shell">
@@ -159,12 +159,14 @@
       </section>
 
       <section class="panel chart-panel overview-trend-panel" aria-labelledby="overview-trend-title">
-        <div class="panel-head"><div><h3 id="overview-trend-title">แนวโน้มอุบัติเหตุและผู้เสียชีวิต พ.ศ. 2566–2568</h3><p>กรองปี ไตรมาส หรือเดือนร่วมกับทุกส่วนของ dashboard · คลิกจุดกราฟเพื่อเลือกช่วงเวลา</p></div></div>
+        <div class="panel-head"><div><h3 id="overview-trend-title">แนวโน้มผู้บาดเจ็บและผู้เสียชีวิต พ.ศ. 2566–2568</h3><p>กรองปี ไตรมาส หรือเดือนร่วมกับทุกส่วนของ dashboard · คลิกจุดกราฟเพื่อเลือกช่วงเวลา</p></div></div>
         <div class="overview-time-controls"><div class="filter-group"><label for="trend-year-filter">ปี</label><select id="trend-year-filter"><option value="all">ทุกปี (2566–2568)</option><option value="2023">2566</option><option value="2024">2567</option><option value="2025">2568</option></select></div><div class="filter-group"><label for="trend-quarter-filter">ไตรมาส</label><select id="trend-quarter-filter"><option value="all">ทุกไตรมาส</option><option value="1">Q1</option><option value="2">Q2</option><option value="3">Q3</option><option value="4">Q4</option></select></div><div class="filter-group"><label for="trend-month-filter">เดือน</label><select id="trend-month-filter"><option value="all">ทุกเดือน</option><option value="1">ม.ค.</option><option value="2">ก.พ.</option><option value="3">มี.ค.</option><option value="4">เม.ย.</option><option value="5">พ.ค.</option><option value="6">มิ.ย.</option><option value="7">ก.ค.</option><option value="8">ส.ค.</option><option value="9">ก.ย.</option><option value="10">ต.ค.</option><option value="11">พ.ย.</option><option value="12">ธ.ค.</option></select></div><div class="filter-group"><label for="trend-granularity">แสดงแนวโน้ม</label><select id="trend-granularity"><option value="month">รายเดือน</option><option value="quarter">รายไตรมาส</option><option value="year">รายปี</option></select></div></div>
         <button class="small-btn" id="reset-time-filters" type="button">ล้างช่วงเวลา</button>
         <p id="overview-period-status" class="chart-footnote" aria-live="polite"></p>
-        <div class="chart-area overview-trend-area"><canvas id="overview-trend-chart" role="img" aria-label="แนวโน้มอุบัติเหตุและผู้เสียชีวิต"></canvas><div id="overview-trend-tooltip" class="scatter-tooltip" hidden></div></div>
-        <div class="legend-row"><span class="legend-year"><i style="background:#C1121F"></i>อุบัติเหตุ · แกนซ้าย</span><span class="legend-year"><i style="background:#D97706"></i>ผู้เสียชีวิต · แกนขวา</span></div>
+        <h4 class="overview-trend-subtitle">แนวโน้มผู้บาดเจ็บ พ.ศ. 2566–2568</h4>
+        <div class="chart-area overview-trend-area"><canvas id="overview-injury-trend-chart" role="img" aria-label="แนวโน้มผู้บาดเจ็บ"></canvas><div id="overview-injury-trend-chart-tooltip" class="scatter-tooltip" hidden></div></div>
+        <h4 class="overview-trend-subtitle">แนวโน้มผู้เสียชีวิต พ.ศ. 2566–2568</h4>
+        <div class="chart-area overview-trend-area"><canvas id="overview-death-trend-chart" role="img" aria-label="แนวโน้มผู้เสียชีวิต"></canvas><div id="overview-death-trend-chart-tooltip" class="scatter-tooltip" hidden></div></div>
       </section>
 
       <!-- Multi-Year Summary Table (TRAMS) -->
@@ -454,7 +456,7 @@
   <!-- Scripts -->
   <script src="vendor/leaflet/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="vendor/markercluster/leaflet.markercluster.js"></script>
-  <script src="overview-analytics.js"></script>
+  <script src="overview-analytics.js?v=20261030-split-trends"></script>
   <script src="app.js?v=20261030-density-2"></script>
 </body>
 </html>

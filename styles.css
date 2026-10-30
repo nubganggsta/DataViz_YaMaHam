@@ -1989,3 +1989,5 @@ body[data-theme] #overview-kpis .kpi-card {
 .map-value-badge small { font-size:8px; margin-top:2px; }
 .map-value-badge.is-cluster { border-width:3px; box-shadow:0 0 0 4px #ffffff50,0 2px 8px #0005; }
 #map-point-metric-note { margin:0 22px 12px; }
+
+.overview-trend-subtitle { margin:24px 22px 0; font-size:15px; color:var(--ink-primary); }
