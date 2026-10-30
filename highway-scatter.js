@@ -8,11 +8,13 @@
     'ภาคตะวันออก': '#FF8C00',
     'ภาคตะวันตก': '#9333ea',
     'ภาคใต้': '#1e40af',
-    'ไม่ระบุ': '#6b7280'
+    'ไม่ระบุ': '#6b7280',
+    'หลายภาค': '#64748b'
   };
   const numberFormat = new Intl.NumberFormat('th-TH');
   let points = [];
   let currentRoads = [];
+  let currentRecords = [];
   let selectedId = null;
   let plot = null;
   let onSelectRoad = null;
@@ -25,36 +27,50 @@
 
   function featureId(value) {
     if (value === null || value === undefined || value === '') return '';
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? String(Math.trunc(numeric)) : String(value).trim();
+    const ref = String(value).trim();
+    return /^\d+(?:\.0+)?$/.test(ref) ? String(Number(ref)) : ref;
   }
 
   function groupRecords(records, roads = []) {
     const roadsById = new Map((roads || []).map(road => [featureId(road.id), road]));
     const grouped = new Map();
+    const eventRoads = new Map();
+    for (const row of records || []) {
+      if (row.road_status !== 'matched' || !featureId(row.road_feature_id) || row.id == null || row.id === '') continue;
+      const eventId=String(row.id);
+      if(!eventRoads.has(eventId))eventRoads.set(eventId,new Set());
+      eventRoads.get(eventId).add(featureId(row.road_feature_id));
+    }
+    const seen = new Set();
     for (const row of records || []) {
       if (row.road_status !== 'matched' || !row.road_feature_id) continue;
       const id = featureId(row.road_feature_id);
       if (!id) continue;
+      const eventId = String(row.id ?? '');
+      if (!eventId || seen.has(eventId) || eventRoads.get(eventId)?.size !== 1) continue;
+      seen.add(eventId);
       let group = grouped.get(id);
       if (!group) {
         const road = roadsById.get(id);
         group = {
-          id, eventIds: new Set(), events: 0, deaths: 0,
+          id, eventIds: new Set(), provinces: new Set(), regions: new Set(), events: 0, deaths: 0,
           highway: road?.highway_code || row.matched_highway_code || row.highway_code || 'ไม่ระบุ',
           name: road?.road_name || road?.highway_name || row.road_name || 'ไม่ระบุชื่อช่วงทาง',
-          section: road?.road_code || (row.km ? `หลัก กม. ${row.km}` : `Geometry ID ${id}`),
+          section: `${road?.road_code || 'ไม่ระบุรหัสช่วงทาง'} · Geometry ID ${id}`,
           province: road?.province || row.province || 'ไม่ระบุ', region: road?.region || row.region || 'ไม่ระบุ'
         };
         grouped.set(id, group);
       }
-      const eventId = String(row.id ?? '');
       if (!eventId || group.eventIds.has(eventId)) continue;
+      group.provinces.add(row.province || 'ไม่ระบุ');
+      group.regions.add(row.region || 'ไม่ระบุ');
       group.eventIds.add(eventId);
       group.events += 1;
       group.deaths += Math.max(0, Number(row.fatalities) || 0);
     }
-    return [...grouped.values()].map(({ eventIds, ...group }) => group)
+    return [...grouped.values()].map(({ eventIds, provinces, regions, ...group }) => ({...group,
+      province:[...provinces].sort().join(' / '),region:regions.size===1?[...regions][0]:'หลายภาค',
+      regionDetails:[...regions].sort().join(' / ')}))
       .filter(group => group.events > 0)
       .sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
   }
@@ -74,10 +90,10 @@
   }
 
   function tooltipHtml(point) {
-    return `<strong>ทล. ${esc(point.highway)}</strong>` +
+    return `<strong>${String(point.id).startsWith('drr:')?'ทางหลวงชนบท':'ทางหลวง'} ${esc(point.highway)}</strong>` +
       `<div>ชื่อสายทาง: ${esc(point.name)}</div>` +
-      `<div>ช่วงทาง (KM): ${esc(point.section)}</div>` +
-      `<div>จังหวัด: ${esc(point.province)} · ${esc(point.region)}</div>` +
+      `<div>ช่วงทางอ้างอิง: ${esc(point.section)}</div>` +
+      `<div>จังหวัด: ${esc(point.province)} · ${esc(point.regionDetails)}</div>` +
       `<div>อุบัติเหตุ: ${numberFormat.format(point.events)} ครั้ง</div>` +
       `<div>ผู้เสียชีวิต: ${numberFormat.format(point.deaths)} ราย</div>`;
   }
@@ -85,6 +101,7 @@
   function render(canvas, records, roads, selectRoad) {
     if (!canvas) return;
     onSelectRoad = selectRoad;
+    currentRecords = records || [];
     currentRoads = roads || [];
     points = groupRecords(records, roads);
     if (selectedId && !points.some(point => point.id === selectedId)) {
@@ -93,6 +110,17 @@
       if (selection) selection.replaceChildren();
     }
     legendFor(points);
+    const picker=document.getElementById('scatter-segment-picker');
+    if(picker){
+      picker.replaceChildren();
+      const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='เลือก Geometry เพื่อดูรายละเอียด (ใช้ได้เมื่อจุดซ้อนกัน)';picker.append(placeholder);
+      for(const point of points){const option=document.createElement('option');option.value=point.id;option.textContent=`${point.highway} · ${point.province} · ID ${point.id} · ${numberFormat.format(point.events)} ครั้ง / ${numberFormat.format(point.deaths)} ราย`;picker.append(option);}
+      picker.value=selectedId || '';picker.disabled=!points.length;
+    }
+    const coverage=document.getElementById('scatter-coverage');
+    if(coverage)coverage.textContent=`${numberFormat.format(points.length)} Geometry · ${numberFormat.format(points.reduce((sum,p)=>sum+p.events,0))} เหตุการณ์ไม่ซ้ำที่ใช้ได้ / ${numberFormat.format(new Set(currentRecords.map(r=>r.id)).size)} เหตุการณ์ตามตัวกรอง · ${numberFormat.format(points.reduce((sum,p)=>sum+p.deaths,0))} ผู้เสียชีวิต`;
+    const selection=document.getElementById('scatter-selection');
+    if(selection && selectedId){const selected=points.find(p=>p.id===selectedId);if(selected)selection.innerHTML=tooltipHtml(selected);}
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
@@ -109,13 +137,14 @@
     const dark = document.body.dataset.theme === 'dark';
     const text = dark ? '#cbd5e1' : '#385365';
     const grid = dark ? 'rgba(255,255,255,.12)' : 'rgba(0,48,73,.15)';
+    if(!points.length){plot=null;ctx.fillStyle=text;ctx.font='13px Prompt,sans-serif';ctx.textAlign='center';ctx.fillText('ไม่มีเหตุการณ์ที่จับคู่ถนนได้ตามตัวกรองนี้',width/2,height/2);return;}
     const pad = {l: 58, r: 22, t: 18, b: 46};
     const plotW = width - pad.l - pad.r, plotH = height - pad.t - pad.b;
     plot = {pad, plotW, plotH, width, height};
 
     const maxX = Math.max(1, ...points.map(p => p.events));
     const maxY = Math.max(1, ...points.map(p => p.deaths));
-    const niceMax = value => value <= 5 ? value : Math.ceil(value / 5) * 5;
+    const niceMax = value => Math.max(4, Math.ceil(value / 4) * 4);
     const xMax = niceMax(maxX), yMax = niceMax(maxY);
     plot.xMax = xMax; plot.yMax = yMax;
 
@@ -168,6 +197,11 @@
     const tooltip = document.getElementById('scatter-tooltip');
     const selection = document.getElementById('scatter-selection');
     if (!canvas) return;
+    document.getElementById('scatter-segment-picker')?.addEventListener('change',event=>{
+      const point=points.find(point=>point.id===event.target.value);if(!point)return;
+      selectedId=point.id;render(canvas,currentRecords,currentRoads,onSelectRoad);
+      if(typeof onSelectRoad==='function')onSelectRoad(point.id);
+    });
     canvas.addEventListener('mousemove', event => {
       const box = canvas.getBoundingClientRect();
       const point = nearestPoint(event.clientX - box.left, event.clientY - box.top);
@@ -175,7 +209,7 @@
       if (!tooltip || !point) { if (tooltip) tooltip.hidden = true; return; }
       tooltip.innerHTML = tooltipHtml(point);
       tooltip.hidden = false;
-      tooltip.style.left = `${Math.min(box.width - 250, Math.max(8, event.clientX - box.left + 12))}px`;
+      tooltip.style.left = `${Math.max(8,Math.min(box.width - 250, event.clientX - box.left + 12))}px`;
       tooltip.style.top = `${Math.max(8, event.clientY - box.top - 18)}px`;
     });
     canvas.addEventListener('mouseleave', () => { if (tooltip) tooltip.hidden = true; });
@@ -185,10 +219,9 @@
       if (!point) return;
       selectedId = point.id;
       if (selection) selection.innerHTML = tooltipHtml(point);
-      render(canvas, window.getFilteredRecords ? window.getFilteredRecords() : [], currentRoads, onSelectRoad);
+      render(canvas, currentRecords, currentRoads, onSelectRoad);
       if (typeof onSelectRoad === 'function') onSelectRoad(point.id);
     });
-    window.addEventListener('resize', () => render(canvas, window.getFilteredRecords ? window.getFilteredRecords() : [], currentRoads, onSelectRoad));
   });
 
   window.HighwayScatter = { render, groupRecords };

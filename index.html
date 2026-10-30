@@ -88,6 +88,8 @@
             </select>
           </div>
 
+          <div class="filter-group"><label class="filter-label" for="quarter-filter">ไตรมาส</label><select id="quarter-filter"><option value="all">ทุกไตรมาส</option><option value="1">Q1</option><option value="2">Q2</option><option value="3">Q3</option><option value="4">Q4</option></select></div>
+          <div class="filter-group"><label class="filter-label" for="month-filter">เดือน</label><select id="month-filter"><option value="all">ทุกเดือน</option><option value="1">ม.ค.</option><option value="2">ก.พ.</option><option value="3">มี.ค.</option><option value="4">เม.ย.</option><option value="5">พ.ค.</option><option value="6">มิ.ย.</option><option value="7">ก.ค.</option><option value="8">ส.ค.</option><option value="9">ก.ย.</option><option value="10">ต.ค.</option><option value="11">พ.ย.</option><option value="12">ธ.ค.</option></select></div>
           <div class="filter-group">
             <label class="filter-label" for="fatality-filter">สถานะความรุนแรง</label>
             <select id="fatality-filter"><option value="all">ทุกเหตุการณ์</option><option value="fatal">มีผู้เสียชีวิต</option><option value="nonfatal">ไม่มีผู้เสียชีวิต</option></select>
@@ -126,7 +128,7 @@
       </nav> -->
 
       <!-- 01 / SPATIAL ANALYSIS -->
-      <section class="section-heading" id="roads">
+      <section class="section-heading" id="overview">
         <div>
           <div class="eyebrow">01 / Overview</div>
           <h2>ภาพรวมอุบัติเหตุทางถนน</h2>
@@ -156,7 +158,55 @@
         <span class="note-count" id="incident-coverage">ตรวจสอบพิกัดจากต้นทาง</span>
       </section>
 
+      <section class="panel chart-panel overview-trend-panel" aria-labelledby="overview-trend-title">
+        <div class="panel-head"><div><h3 id="overview-trend-title">แนวโน้มอุบัติเหตุและผู้เสียชีวิต พ.ศ. 2566–2568</h3><p>กรองปี ไตรมาส หรือเดือนร่วมกับทุกส่วนของ dashboard · คลิกจุดกราฟเพื่อเลือกช่วงเวลา</p></div></div>
+        <div class="overview-time-controls"><div class="filter-group"><label for="trend-year-filter">ปี</label><select id="trend-year-filter"><option value="all">ทุกปี (2566–2568)</option><option value="2023">2566</option><option value="2024">2567</option><option value="2025">2568</option></select></div><div class="filter-group"><label for="trend-quarter-filter">ไตรมาส</label><select id="trend-quarter-filter"><option value="all">ทุกไตรมาส</option><option value="1">Q1</option><option value="2">Q2</option><option value="3">Q3</option><option value="4">Q4</option></select></div><div class="filter-group"><label for="trend-month-filter">เดือน</label><select id="trend-month-filter"><option value="all">ทุกเดือน</option><option value="1">ม.ค.</option><option value="2">ก.พ.</option><option value="3">มี.ค.</option><option value="4">เม.ย.</option><option value="5">พ.ค.</option><option value="6">มิ.ย.</option><option value="7">ก.ค.</option><option value="8">ส.ค.</option><option value="9">ก.ย.</option><option value="10">ต.ค.</option><option value="11">พ.ย.</option><option value="12">ธ.ค.</option></select></div><div class="filter-group"><label for="trend-granularity">แสดงแนวโน้ม</label><select id="trend-granularity"><option value="month">รายเดือน</option><option value="quarter">รายไตรมาส</option><option value="year">รายปี</option></select></div></div>
+        <button class="small-btn" id="reset-time-filters" type="button">ล้างช่วงเวลา</button>
+        <p id="overview-period-status" class="chart-footnote" aria-live="polite"></p>
+        <div class="chart-area overview-trend-area"><canvas id="overview-trend-chart" role="img" aria-label="แนวโน้มอุบัติเหตุและผู้เสียชีวิต"></canvas><div id="overview-trend-tooltip" class="scatter-tooltip" hidden></div></div>
+        <div class="legend-row"><span class="legend-year"><i style="background:#C1121F"></i>อุบัติเหตุ · แกนซ้าย</span><span class="legend-year"><i style="background:#D97706"></i>ผู้เสียชีวิต · แกนขวา</span></div>
+      </section>
+
+      <!-- Multi-Year Summary Table (TRAMS) -->
+      <section class="panel incident-table-panel">
+        <div class="panel-head">
+          <div>
+            <h3>ตารางสรุปสถิติอุบัติเหตุและผู้เสียชีวิตรายปี (TRAMS)</h3>
+            <p>สถิติจากระบบบูรณาการรายงานอุบัติเหตุบนสายทาง กระทรวงคมนาคม พ.ศ. 2566–2568</p>
+          </div>
+          <span class="tag tag-accent">ข้อมูลจริงระดับเหตุการณ์</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ปี พ.ศ.</th>
+                <th>เหตุการณ์ทั้งหมด</th>
+                <th>ผู้เสียชีวิต</th>
+                <th>บาดเจ็บสาหัส</th>
+                <th>บาดเจ็บเล็กน้อย</th>
+                <th>รวมผู้บาดเจ็บ</th>
+                <th>รถที่เกิดเหตุ</th>
+                <th>เหตุการณ์มีพิกัด</th>
+              </tr>
+            </thead>
+            <tbody id="incident-year-table"></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- 02 / SPATIAL ANALYSIS -->
+      <section class="panel chart-panel scatter-panel" aria-labelledby="highway-scatter-title">
+        <div class="panel-head"><div><h3 id="highway-scatter-title">ความสัมพันธ์ระหว่างจำนวนอุบัติเหตุกับจำนวนผู้เสียชีวิต รายช่วงทางหลวง</h3><p>หนึ่งจุดต่อ Geometry ถนนที่จับคู่ได้ภายใน 100 เมตร ใช้ตัวกรองเดียวกับ dashboard · จำนวนดิบไม่ใช่อัตราความเสี่ยง</p></div></div>
+        <p class="chart-footnote" id="scatter-coverage" aria-live="polite"></p>
+        <div class="scatter-legend" id="scatter-legend"></div>
+        <label for="scatter-segment-picker">เลือกจุดที่ซ้อนกัน / เลือก Geometry เพื่อดูรายละเอียด</label>
+        <select id="scatter-segment-picker" aria-label="เลือก Geometry ใน Scatter Plot" style="width:100%;max-width:100%;margin:8px 0;padding:8px;background:var(--bg-surface);color:var(--ink-primary);border:1px solid var(--border-strong);border-radius:8px"></select>
+        <div class="chart-area scatter-chart-area"><canvas id="highway-scatter-chart" role="img" aria-label="จำนวนอุบัติเหตุกับผู้เสียชีวิตต่อ Geometry ถนน"></canvas><div class="scatter-tooltip" id="scatter-tooltip" hidden></div></div>
+        <p class="chart-footnote">ใช้เฉพาะเหตุการณ์ที่จับคู่ถนนได้ ไม่ครอบคลุมทุกเหตุการณ์ ช่วงทางอ้างอิงตามหน่วย Geometry ของ DOH/DRR ไม่ใช่ช่วง กม. ที่กำหนดใหม่ · กรณีเส้นทางผ่านหลายภาคใช้สีหมวดหลายภาค · คลิกจุดเพื่อดูรายละเอียดและไปยังเส้นถนนที่มี ID ตรงกัน</p>
+        <div class="scatter-selection" id="scatter-selection" aria-live="polite"></div>
+      </section>
+
       <section class="section-heading" id="roads">
         <div>
           <div class="eyebrow">02 / SPATIAL ANALYSIS</div>
@@ -174,7 +224,7 @@
               <span class="crumb-item active" data-level="country">ประเทศไทย</span>
             </div>
             <h3>พิกัดเหตุการณ์อุบัติเหตุจาก TRAMS</h3>
-            <p>ภาพถ่ายดาวเทียมพร้อมป้ายถนน ใช้เส้นทางจริงจาก GeoPackage และขอบเขตจังหวัดจาก GIS; จุดสีฟ้าและสีแดงมาจากพิกัด TRAMS</p>
+            <p>แสดงทุกแนวเส้นในชุดข้อมูลทางหลวงแผ่นดิน DOH และทางหลวงชนบท DRR แยกสีตามประเภท; ถนนที่พาดผ่านหลายจังหวัดจะแสดงในทุกจังหวัดที่ผ่าน ข้อมูลที่เปิดเผยอาจยังไม่ครอบคลุมถนนทุกสายในประเทศ</p>
           </div>
 
           <div class="map-controls">
@@ -205,11 +255,13 @@
                 <option value="digit_1">ทางหลวงเลข 1 หลัก (สีม่วง)</option>
                 <option value="digit_2">ทางหลวงเลข 2 หลัก (สีน้ำเงิน)</option>
                 <option value="digit_3">ทางหลวงเลข 3 หลัก (สีชมพู)</option>
+                <option value="digit_4">ทางหลวงเลข 4 หลัก (สีเทา)</option>
+                <option value="rural">ทางหลวงชนบท (สีฟ้าอ่อน)</option>
               </select>
             </div>
 
             <div class="map-layer-toggles">
-              <label><input type="checkbox" id="show-roads" checked> แนวทางหลวง</label>
+              <label><input type="checkbox" id="show-roads" checked> ทางหลวงแผ่นดินและทางหลวงชนบท</label>
               <label><input type="checkbox" id="show-points" checked> พิกัดอุบัติเหตุ</label>
               <label><input type="checkbox" id="show-boundary" checked> ขอบเขตพื้นที่</label>
             </div>
@@ -248,7 +300,8 @@
               <span class="legend-item"><i class="legend-line line-purple"></i> ทางหลวง 1 หลัก</span>
               <span class="legend-item"><i class="legend-line line-blue"></i> ทางหลวง 2 หลัก</span>
               <span class="legend-item"><i class="legend-line line-pink"></i> ทางหลวง 3 หลัก</span>
-              <span class="legend-item"><i class="legend-line line-slate"></i> ไม่ระบุประเภท / 4 หลักขึ้นไป</span>
+              <span class="legend-item"><i class="legend-line" style="background:#6b7280"></i> ทางหลวง 4 หลัก / อื่น ๆ</span>
+              <span class="legend-item"><i class="legend-line" style="background:#2391FF"></i> ทางหลวงชนบท</span>
               <span class="legend-item"><i class="map-dot map-dot-fatal"></i> เหตุการณ์มีผู้เสียชีวิต</span>
               <span class="legend-item"><i class="map-dot map-dot-accident"></i> เหตุการณ์ไม่มีผู้เสียชีวิต</span>
               <span class="legend-item"><i class="boundary-legend"></i> ขอบเขตจังหวัด / ภาค</span>
@@ -265,7 +318,14 @@
           <span>ภาพถ่ายและป้ายถนน © Esri, Maxar, Earthstar Geographics · ขอบเขตจังหวัด © DDPM · ซูมและเลื่อนได้อิสระ</span>
         </div>
       </section>
+      <section class="panel incident-table-panel" aria-labelledby="area-ranking-title">
+        <div class="panel-head"><div><h3 id="area-ranking-title">อันดับจังหวัดที่เกิดอุบัติเหตุสูงสุดในประเทศไทย</h3><p id="area-ranking-note" aria-live="polite"></p></div></div>
+        <div class="table-wrap" style="max-height:480px;overflow:auto">
+          <table><thead><tr><th>อันดับ</th><th id="area-ranking-unit">จังหวัด</th><th>อุบัติเหตุ (ครั้ง)</th><th>เหตุการณ์มีผู้เสียชีวิต</th><th>ผู้เสียชีวิต (ราย)</th><th>ผู้บาดเจ็บ (ราย)</th></tr></thead><tbody id="area-ranking-body"></tbody></table>
+        </div>
+      </section>
       <!--
+
 
       <section class="kpi-grid" id="overview">
         <article class="kpi-card accent-coral">
@@ -293,9 +353,9 @@
         </article>
 
         <article class="kpi-card accent-green">
-          <div class="kpi-label">ผลจับคู่ถนนเดิมบางส่วน</div>
+          <div class="kpi-label">เหตุการณ์ที่จับคู่แนวถนนได้</div>
           <div class="kpi-value" id="kpi-road-match">—</div>
-          <div class="kpi-foot">มีเฉพาะ subset เดิม ยังไม่ใช้จัดอันดับถนน</div>
+          <div class="kpi-foot">ระยะไม่เกิน 100 เมตร และไม่ขัดกับรหัสต้นทาง</div>
           <div class="kpi-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="7 17 17 7"/>
@@ -330,34 +390,6 @@
         <div class="chart-area heatmap-area"><canvas id="weekday-hour-chart" aria-label="ตารางความถี่อุบัติเหตุตามวันในสัปดาห์และชั่วโมงเต็ม 24 ชั่วโมง"></canvas></div>
       </section>
 
-      <!-- Multi-Year Summary Table (TRAMS) -->
-      <section class="panel incident-table-panel">
-        <div class="panel-head">
-          <div>
-            <h3>ตารางสรุปสถิติอุบัติเหตุและผู้เสียชีวิตรายปี (TRAMS)</h3>
-            <p>สถิติจากระบบบูรณาการรายงานอุบัติเหตุบนสายทาง กระทรวงคมนาคม พ.ศ. 2566–2568</p>
-          </div>
-          <span class="tag tag-accent">ข้อมูลจริงระดับเหตุการณ์</span>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ปี พ.ศ.</th>
-                <th>เหตุการณ์ทั้งหมด</th>
-                <th>ผู้เสียชีวิต</th>
-                <th>บาดเจ็บสาหัส</th>
-                <th>บาดเจ็บเล็กน้อย</th>
-                <th>รวมผู้บาดเจ็บ</th>
-                <th>รถที่เกิดเหตุ</th>
-                <th>เหตุการณ์มีพิกัด</th>
-              </tr>
-            </thead>
-            <tbody id="incident-year-table"></tbody>
-          </table>
-        </div>
-      </section>
-
       <!-- 03 / VEHICLES & DYNAMICS -->
       <section class="section-heading" id="people">
         <div>
@@ -388,38 +420,29 @@
           <div class="panel-head"><div><h3>สภาพอากาศขณะเกิดเหตุ</h3><p>วางเมาส์เพื่อดูจำนวนและสัดส่วน · คลิกเพื่อกรองร่วม</p></div><span class="tag tag-muted">สภาพแวดล้อม</span></div>
           <div class="semantic-chart-area weather-area" id="semantic-weather" aria-label="สภาพอากาศ"></div>
         </article>
+        <article class="panel chart-panel semantic-panel" data-semantic="context">
+          <div class="panel-head"><div><h3>บริเวณที่เกิดเหตุ</h3><p>ทางตรง ทางโค้ง และทางแยก หลังรวมคำใกล้กัน · คลิกเพื่อกรองร่วม</p></div><span class="tag tag-muted">รายละเอียดที่เกิดเหตุ</span></div>
+          <div class="semantic-chart-area treemap-area" id="semantic-context" aria-label="บริเวณที่เกิดเหตุ"></div>
+        </article>
       </section>
       <div class="semantic-filter-status" id="semantic-filter-status" hidden><span id="semantic-filter-label"></span><button class="small-btn" id="clear-semantic-filters" type="button">ล้างตัวกรองกราฟ</button></div>
 
-      <!-- Top 10 Dangerous Highway Segments -->
-      <section class="panel hotspots-panel">
-        <div class="panel-head">
-          <div>
-            <h3>การจัดอันดับช่วงทาง</h3>
-            <p>แนวเส้นทางเป็นข้อมูลอ้างอิง; ยังไม่รวมอุบัติเหตุเป็นอันดับช่วงทาง เพราะต้องตรวจสอบรหัสสายทาง/หลักกิโลเมตรและวิธีจับคู่ก่อน</p>
-          </div>
-          <span class="tag tag-muted" id="hotspots-tag">จัดอันดับตามตัวกรอง</span>
-        </div>
-        <div class="hotspots-list" id="hotspots-list"></div>
-      </section>
+      <details class="panel incident-details-panel">
+        <summary>รายละเอียดที่เกิดเหตุรายเหตุการณ์</summary>
+        <p id="incident-details-count" aria-live="polite"></p>
+        <div class="table-wrap"><table><thead><tr><th>ACC_CODE</th><th>วันที่/เวลาเกิดเหตุ</th><th>จังหวัด</th><th>รหัส/ชื่อสายทาง</th><th>กม.</th><th>บริเวณที่เกิดเหตุ</th><th>มูลเหตุสันนิษฐาน</th><th>ลักษณะเหตุ</th><th>สภาพอากาศ</th><th>ผู้เสียชีวิต</th><th>ผู้บาดเจ็บ</th></tr></thead><tbody id="incident-details-body"></tbody></table></div>
+        <div class="incident-details-pagination"><button class="small-btn" id="incident-details-prev" type="button">หน้าก่อน</button><button class="small-btn" id="incident-details-next" type="button">หน้าถัดไป</button><span>ใช้ปุ่มส่งออก CSV เพื่อดาวน์โหลดทุกเหตุการณ์ตามตัวกรอง</span></div>
+      </details>
 
       <!-- Bottom Insights & Context -->
-      <section class="bottom-grid">
+      <section class="bottom-grid quality-only-grid">
         <article class="panel insight-panel">
           <div class="eyebrow">DATA SPECIFICATION & STANDARDS</div>
           <h3>มาตรฐานและการประมวลผลข้อมูลเชิงภูมิศาสตร์</h3>
           <ul id="quality-list"></ul>
         </article>
 
-        <article class="panel insight-panel">
-          <div class="eyebrow">ROAD CONTEXT & TRAFFIC</div>
-          <h3>ปริมาณจราจรเฉลี่ยต่อวัน (AADT)</h3>
-          <div class="traffic-kpi">
-            <strong>ยังไม่พร้อม</strong>
-            <span>ยังไม่มี AADT ที่เชื่อมโยงและตรวจสอบแล้ว</span>
-          </div>
-          <p>จะคำนวณอัตราต่อปริมาณจราจรได้เมื่อมีปีข้อมูล หน่วย และรหัสช่วงทางที่ตรงกันครบถ้วนเท่านั้น</p>
-        </article>
+
       </section>
 
 
@@ -439,6 +462,8 @@
   <!-- Scripts -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.4/dist/leaflet.markercluster.js"></script>
+  <script src="overview-analytics.js"></script>
+  <script src="highway-scatter.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

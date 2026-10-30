@@ -1,0 +1,26 @@
+{
+  "input_events": 69806,
+  "accepted_events": 69302,
+  "excluded_events": 504,
+  "tolerance_m": 100,
+  "distance_crs": "EPSG:32647 / EPSG:32648",
+  "geometry": "original unsimplified DOH GeoPackage and DRR source road lines",
+  "counts": {
+    "province_coordinate_conflicts": 183,
+    "matched_DRR": 2599,
+    "matched": 67518,
+    "matched_DOH": 64919,
+    "no_highway_within_tolerance": 1132,
+    "road_name_filled": 20229,
+    "ambiguous_nearest": 193,
+    "missing_or_invalid_coordinates": 494,
+    "source_ref_conflict": 459,
+    "outside_thailand_polygon": 10,
+    "province_filled": 1934,
+    "highway_ref_filled": 9
+  },
+  "road_match_features": {
+    "DOH": 3083,
+    "DRR": 3677
+  }
+}

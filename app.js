@@ -16,9 +16,29 @@ const HIGHWAY_COLORS = {
   digit_1: '#9333ea',    // 1-digit: Purple (ทล. 1, 2, 4)
   digit_2: '#1e40af',    // 2-digit: Blue   (ทล. 12, 24, 35)
   digit_3: '#db2777',    // 3-digit: Pink   (ทล. 201, 304)
-  digit_4_plus: '#64748b', // 4+ digits: Neutral Slate
-  unknown: '#64748b'     // Rural/Other
+  digit_4: '#6b7280',
+  digit_4_plus: '#6b7280',
+  rural: '#2391FF',
+  unknown: '#6b7280'
 };
+
+function classifyHighwayRef(value, paddedGeometry = false) {
+  const ref = String(value ?? '').trim();
+  if (/^[ก-ฮ]/u.test(ref)) return {type: 'rural', ref};
+  if (/^\d+$/.test(ref)) {
+    const normalized = paddedGeometry ? ref.replace(/^0+(?=\d)/, '') : ref;
+    return {type: normalized.length <= 4 ? `digit_${normalized.length}` : 'digit_4_plus', ref: normalized};
+  }
+  return {type: 'unknown', ref};
+}
+
+function recordHighway(record) {
+  return classifyHighwayRef(record.highway_code_raw || record.highway_code);
+}
+
+function roadClassification(road) {
+  return road.network === 'rural' ? 'rural' : classifyHighwayRef(road.highway_code, true).type;
+}
 
 // Global Application State
 let DATA = null;          // dashboard_data.json
@@ -28,12 +48,16 @@ let mapAssetsPromise = null;
 let mapAssetsLoaded = false;
 
 let selectedYear = 'all';           // 'all', '2023', '2024', '2025'
+let selectedQuarter = 'all';
+let selectedMonth = 'all';
 let selectedRegion = 'all';         // 'all' or Thai region name
 let selectedProvince = 'all';       // 'all' or Thai province name
 let selectedHighwayDigits = 'all';  // 'all', 'digit_1', 'digit_2', 'digit_3'
 let selectedVehicle = 'all';
 let selectedFatality = 'all';
-const semanticFilters = { vehicle: 'all', cause: 'all', collision: 'all', weather: 'all' };
+const semanticFilters = { vehicle: 'all', cause: 'all', collision: 'all', weather: 'all', context: 'all' };
+let incidentDetailPage = 1;
+let incidentDetailFilterKey = '';
 let provinceFatalityCounts = new Map();
 let provinceEventCounts = new Map();
 let pendingRoadHighlightId = null;
@@ -122,18 +146,44 @@ function roundedRect(ctx, x, y, w, h, r) {
 }
 
 /* Data Filtering Functions */
+function syncTemporalControls() {
+  for (const [key,value] of Object.entries({year:selectedYear,quarter:selectedQuarter,month:selectedMonth})) {
+    for (const id of [`${key}-filter`,`trend-${key}-filter`]) {
+      const control=document.getElementById(id);if(control)control.value=value;
+    }
+  }
+}
+
+function setTemporalFilters(patch) {
+  if (patch.year !== undefined) selectedYear=['all','2023','2024','2025'].includes(String(patch.year))?String(patch.year):'all';
+  if (patch.quarter !== undefined) {
+    selectedQuarter=['all','1','2','3','4'].includes(String(patch.quarter))?String(patch.quarter):'all';
+    if (patch.month === undefined && (selectedQuarter === 'all' || Math.ceil(Number(selectedMonth)/3)!==Number(selectedQuarter))) selectedMonth='all';
+  }
+  if (patch.month !== undefined) {
+    selectedMonth=String(patch.month)==='all'?'all':String(Math.trunc(Number(patch.month)));
+    if (!(Number(selectedMonth)>=1 && Number(selectedMonth)<=12))selectedMonth='all';
+    if (selectedMonth!=='all')selectedQuarter=String(Math.ceil(Number(selectedMonth)/3));
+  }
+  syncTemporalControls();
+  render();
+}
+
 function getFilteredRecords(ignoreSemantic = null) {
   if (!DATA?.records) return [];
   return DATA.records.filter(r => {
     if (selectedYear !== 'all' && String(r.year) !== selectedYear) return false;
+    if (selectedQuarter !== 'all' || selectedMonth !== 'all') {
+      const month=Number(String(r.incident_date || '').slice(5,7));
+      if (!(month>=1 && month<=12))return false;
+      if (selectedQuarter !== 'all' && Math.ceil(month/3)!==Number(selectedQuarter))return false;
+      if (selectedMonth !== 'all' && month!==Number(selectedMonth))return false;
+    }
     if (selectedRegion !== 'all' && r.region !== selectedRegion) return false;
     if (selectedProvince !== 'all' && r.province !== selectedProvince) return false;
     if (selectedVehicle !== 'all' && r.vehicle !== selectedVehicle) return false;
     if (selectedHighwayDigits !== 'all') {
-      const code = String(r.highway_code || '');
-      const digits = Number(r.highway_digits) || (/^\d+$/.test(code) ? code.length : 0);
-      const target = selectedHighwayDigits === 'digit_4_plus' ? digits >= 4 : digits === Number(selectedHighwayDigits.replace('digit_', ''));
-      if (!target) return false;
+      if (recordHighway(r).type !== selectedHighwayDigits) return false;
     }
     if (selectedFatality === 'fatal' && !(Number(r.fatalities) > 0)) return false;
     if (selectedFatality === 'nonfatal' && Number(r.fatalities) > 0) return false;
@@ -151,19 +201,13 @@ function getFilteredRoads() {
   return DATA.roads.filter(road => {
     // 1. Regional and provincial spatial filter
     if (selectedProvince !== 'all') {
-      if (road.province !== selectedProvince) return false;
+      if (!(road.provinces || [road.province]).includes(selectedProvince)) return false;
     } else if (selectedRegion !== 'all') {
-      if (road.region !== selectedRegion) return false;
+      if (!(road.regions || [road.region]).includes(selectedRegion)) return false;
     }
 
     // 2. Highway digit classification filter
-    if (selectedHighwayDigits === 'digit_1') {
-      return road.digit_type === 'digit_1';
-    } else if (selectedHighwayDigits === 'digit_2') {
-      return road.digit_type === 'digit_2';
-    } else if (selectedHighwayDigits === 'digit_3') {
-      return road.digit_type === 'digit_3';
-    }
+    if (selectedHighwayDigits !== 'all') return roadClassification(road) === selectedHighwayDigits;
     // 'all' shows all road features with their respective colors
     return true;
   });
@@ -171,7 +215,7 @@ function getFilteredRoads() {
 
 /* UI KPI Counters */
 function updateHeroCounter(records) {
-  const yearLabel = selectedYear === 'all' ? '2566–2568' : String(Number(selectedYear) + 543);
+  const yearLabel = (selectedYear === 'all' ? '2566–2568' : String(Number(selectedYear) + 543)) + (selectedQuarter !== 'all' ? ` · Q${selectedQuarter}` : '') + (selectedMonth !== 'all' ? ` · ${MONTHS[Number(selectedMonth)-1]}` : '');
   let areaLabel = 'ทั่วประเทศ';
   if (selectedProvince !== 'all') {
     areaLabel = `จ.${selectedProvince}`;
@@ -477,12 +521,6 @@ function normalizeCategory(field, raw) {
     if (/เก๋ง|รถยนต์นั่ง|ส่วนบุคคล|sedan/.test(lower)) return 'รถยนต์นั่งส่วนบุคคล';
     if (/บรรทุก|พ่วง|สิบล้อ|truck|trailer/.test(lower)) return 'รถบรรทุกใหญ่';
   }
-  if (field === 'cause') {
-    if (/ขับเร็ว|ความเร็ว|เร็วเกิน/.test(text)) return 'ขับรถเร็วเกินกำหนด';
-    if (/ตัดหน้า|กระชั้นชิด/.test(text)) return 'ตัดหน้ากระชั้นชิด';
-    if (/เมา|แอลกอฮอล์|สุรา/.test(text)) return 'เมาสุรา';
-    if (/หลับใน|เพลีย|อ่อนล้า/.test(text)) return 'หลับใน';
-  }
   return text || 'ไม่ระบุ';
 }
 
@@ -506,12 +544,13 @@ function renderSemanticCharts() {
   renderPie('semantic-vehicle', categoryEntries(vehicleRecords, 'vehicle'), 'vehicle');
   renderTreemap('semantic-cause', categoryEntries(getFilteredRecords('cause'), 'cause'), 'cause');
   renderTreemap('semantic-collision', categoryEntries(getFilteredRecords('collision'), 'collision'), 'collision');
+  renderTreemap('semantic-context', categoryEntries(getFilteredRecords('context'), 'context'), 'context');
   renderWeather(getFilteredRecords('weather'));
   renderDonut('semantic-roadtype', categoryEntries(getFilteredRecords(), 'agency'));
   const active = Object.entries(semanticFilters).filter(([,v])=>v!=='all');
   const status = document.getElementById('semantic-filter-status');
   if (status) status.hidden = active.length === 0;
-  setText('semantic-filter-label', active.map(([k,v])=>`${({vehicle:'ยานพาหนะ',cause:'มูลเหตุ',collision:'ลักษณะเหตุ',weather:'สภาพอากาศ'})[k]}: ${v}`).join(' · '));
+  setText('semantic-filter-label', active.map(([k,v])=>`${({vehicle:'ยานพาหนะ',cause:'มูลเหตุ',collision:'ลักษณะเหตุ',weather:'สภาพอากาศ',context:'บริเวณที่เกิดเหตุ'})[k]}: ${v}`).join(' · '));
 }
 
 function renderPie(id, entries, field, donut=false) {
@@ -597,10 +636,11 @@ function drawMap(fitBounds = false) {
     const sortedRoads = [...roads].sort((a, b) => (b.digits || 99) - (a.digits || 99));
 
     for (const road of sortedRoads) {
-      const dType = road.digit_type;
+      const dType = roadClassification(road);
+      const roadTypeLabel = ({digit_1:'ทางหลวงแผ่นดิน 1 หลัก',digit_2:'ทางหลวงแผ่นดิน 2 หลัก',digit_3:'ทางหลวงแผ่นดิน 3 หลัก',digit_4:'ทางหลวงแผ่นดิน 4 หลัก',rural:'ทางหลวงชนบท'})[dType] || 'อื่น ๆ / ไม่ระบุประเภท';
       let color = HIGHWAY_COLORS[dType] || HIGHWAY_COLORS.unknown;
-      let weight = 1.6;
-      let opacity = 0.65;
+      let weight = 2.2;
+      let opacity = 0.92;
 
       if (dType === 'digit_1') {
         color = HIGHWAY_COLORS.digit_1; // #9333ea Purple
@@ -627,14 +667,15 @@ function drawMap(fitBounds = false) {
         poly.bindPopup(`
           <div style="font-family:'Plus Jakarta Sans','Prompt',sans-serif;">
             <strong style="font-size:13px;color:${color};">
-              ทล. ${escapeHtml(road.highway_code || 'ไม่ระบุ')}
+              ${dType === 'rural' ? 'ทางหลวงชนบท' : 'ทล.'} ${escapeHtml(road.highway_code || 'ไม่ระบุ')}
             </strong> · <span style="font-size:11px;color:#64748b;">${escapeHtml(road.road_code || '')}</span>
             <div style="margin-top:4px;font-size:12px;font-weight:600;">
               ${escapeHtml(road.road_name || road.highway_name || 'ไม่ระบุชื่อสายทาง')}
             </div>
             <div style="margin-top:6px;font-size:11px;line-height:1.6;color:#64748b;">
-              <div><b>ประเภท:</b> <span style="color:${color};font-weight:700;">${escapeHtml(road.digit_label || 'ไม่ระบุ')}</span></div>
-              <div><b>พื้นที่ของช่วงทาง:</b> จ.${escapeHtml(road.province)} (${escapeHtml(road.region)})</div>
+              <div><b>ประเภท:</b> <span style="color:${color};font-weight:700;">${escapeHtml(roadTypeLabel)}</span></div>
+              <div><b>พื้นที่ที่เส้นทางผ่าน:</b> ${escapeHtml((road.provinces || [road.province]).join(' / '))}</div>
+              <div><b>แหล่งข้อมูล:</b> ${road.source === 'DRR' ? 'กรมทางหลวงชนบท (DRR)' : 'กรมทางหลวง (DOH)'}</div>
               <div><b>เลขหลักกิโลเมตร:</b> ${escapeHtml(road.road_code || 'ไม่ระบุ')}</div>
             </div>
           </div>
@@ -677,12 +718,16 @@ function drawMap(fitBounds = false) {
           </div>
           <div style="font-size:11px;line-height:1.6;color:#334155;">
             <div><b>สถานที่:</b> จ.${escapeHtml(r.province)} (${escapeHtml(r.region)})</div>
-            <div><b>สายทาง:</b> ทล. ${escapeHtml(r.highway_code || 'ไม่ระบุ')} · ${escapeHtml(r.road_name)}</div>
+            <div><b>บริเวณที่เกิดเหตุ:</b> ${escapeHtml(r.context || 'ไม่ระบุ')} · กม. ${escapeHtml(r.km || 'ไม่ระบุ')}</div>
+            <div><b>สายทาง:</b> ${escapeHtml(r.highway_code_raw || r.highway_code || 'ไม่มีรหัสสายทางในข้อมูล')} · ${escapeHtml(r.road_name || 'ไม่มีชื่อสายทางในข้อมูล')}</div>
+            <div><b>ที่มาข้อมูล:</b> จังหวัด ${r.province_source === 'point_in_polygon' ? 'เติมจากขอบเขต GIS' : 'ข้อมูลต้นทาง'} · ชื่อสายทาง ${r.road_name_source === 'nearest_highway' ? 'เติมจากแนวถนน GIS' : 'ข้อมูลต้นทาง'}</div>
+            <div><b>ผลตรวจถนน:</b> ${escapeHtml(({matched:'จับคู่ได้ภายใน 100 เมตร',no_highway_within_tolerance:'ไม่พบทางหลวงภายใน 100 เมตร',source_ref_conflict:'รหัสต้นทางไม่ตรงกับทางหลวงใกล้เคียง',ambiguous_nearest:'มีหลายช่วงทางใกล้เท่ากัน ยังไม่เติมข้อมูล'})[r.road_spatial_status] || 'ยังไม่ได้ตรวจ')} ${r.road_distance_m != null ? `(${fmt.format(r.road_distance_m)} เมตร)` : ''}</div>
             <div><b>ความสูญเสีย:</b> <span style="color:#C1121F;font-weight:700;">ผู้เสียชีวิต ${fmt.format(r.fatalities || 0)} ราย</span> · บาดเจ็บ ${fmt.format(r.injuries || 0)} ราย</div>
             <div><b>ยานพาหนะ:</b> ${escapeHtml(r.vehicle)}</div>
             <div><b>ลักษณะเหตุ:</b> ${escapeHtml(r.collision)}</div>
             <div><b>มูลเหตุสันนิษฐาน:</b> ${escapeHtml(r.cause)}</div>
             <div><b>สภาพอากาศ:</b> ${escapeHtml(r.weather)}</div>
+            <div><b>วันที่/เวลารายงาน:</b> ${escapeHtml(r.report_date || 'ไม่ระบุ')} ${escapeHtml(r.report_time || '')}${r.report_date_corrected ? ' (ปรับวันที่รายงานให้ไม่ก่อนเกิดเหตุ)' : ''}</div>
             <div><b>พิกัด:</b> ${r.latitude.toFixed(5)}, ${r.longitude.toFixed(5)}</div>
           </div>
         </div>
@@ -713,7 +758,8 @@ function drawMap(fitBounds = false) {
   if (summaryEl) {
     const validCoords = records.filter(r => isValue(r.latitude) && isValue(r.longitude)).length;
     const totalDeaths = records.reduce((s, r) => s + (Number(r.fatalities) || 0), 0);
-    summaryEl.textContent = `แสดง ${fmt.format(validCoords)} เหตุการณ์มีพิกัด (${fmt.format(totalDeaths)} ผู้เสียชีวิต) · ${roads.length ? `${fmt.format(roads.length)} ช่วงถนน` : 'แนวถนนยังไม่เชื่อมเข้าหน้านี้'}`;
+    const ruralCount = roads.filter(road => roadClassification(road) === 'rural').length;
+    summaryEl.textContent = `แสดง ${fmt.format(validCoords)} เหตุการณ์มีพิกัด (${fmt.format(totalDeaths)} ผู้เสียชีวิต) · ทางหลวงแผ่นดิน ${fmt.format(roads.length-ruralCount)} ช่วง · ทางหลวงชนบท ${fmt.format(ruralCount)} ช่วง (ทุกเส้นในชุดข้อมูลที่เปิดเผย)`;
   }
 
   // 7. Dynamic Viewport Zooming
@@ -725,8 +771,7 @@ function drawMap(fitBounds = false) {
   updateBreadcrumbs();
   updateFilterStatusBar(records, roads);
 
-  // 9. Update Hotspots List
-  drawHotspots(records, new Map());
+
 }
 
 async function loadMapAssets() {
@@ -734,13 +779,17 @@ async function loadMapAssets() {
   mapAssetsPromise = (async () => {
     const summary = document.getElementById('map-summary');
     if (summary) summary.textContent = 'กำลังโหลดขอบเขตจังหวัดและโครงข่ายถนน…';
-    const [geoResponse, roadsResponse] = await Promise.all([
+    const [geoResponse, roadsResponse, ruralResponse, areasResponse] = await Promise.all([
       fetch('data/provinces.geojson'),
-      fetch('data/roads.json')
+      fetch('data/roads.json'),
+      fetch('data/rural_roads.json'),
+      fetch('data/road_areas.json')
     ]);
     if (!geoResponse.ok) throw new Error(`โหลด provinces.geojson ไม่สำเร็จ (${geoResponse.status})`);
     PROVINCES_GEO = await geoResponse.json();
-    DATA.roads = roadsResponse.ok ? await roadsResponse.json() : [];
+    if (!roadsResponse.ok || !ruralResponse.ok || !areasResponse.ok) throw new Error('โหลดชั้นถนนไม่ครบ กรุณาสร้างชั้นข้อมูลถนนก่อนเปิดแผนที่');
+    const [nationalRoads, ruralRoads, roadAreas] = await Promise.all([roadsResponse.json(), ruralResponse.json(), areasResponse.json()]);
+    DATA.roads = [...nationalRoads.map(road => ({...road, ...(roadAreas[String(road.id)] || {}), source:'DOH'})), ...ruralRoads];
 
     for (const feat of PROVINCES_GEO.features || []) {
       const props = feat.properties || (feat.properties = {});
@@ -783,8 +832,8 @@ async function loadMapAssets() {
 }
 
 function normalizeRoadFeatureId(value) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? String(Math.trunc(numeric)) : String(value ?? '').trim();
+  const ref = String(value ?? '').trim();
+  return /^\d+(?:\.0+)?$/.test(ref) ? String(Number(ref)) : ref;
 }
 
 function highlightRoadSegment(featureId) {
@@ -796,11 +845,11 @@ function highlightRoadSegment(featureId) {
   const targetId = normalizeRoadFeatureId(featureId);
   const road = (DATA?.roads || []).find(item => normalizeRoadFeatureId(item.id) === targetId);
   const summary = document.getElementById('scatter-selection');
+  roadHighlightLayer?.clearLayers();
   if (!road || !roadHighlightLayer || !leafletMap) {
     if (summary) summary.insertAdjacentHTML('beforeend', '<div class="scatter-map-note">ไม่พบ Geometry ของช่วงทางนี้ในชั้นแผนที่</div>');
     return;
   }
-  roadHighlightLayer.clearLayers();
   const highlightLines = [];
   for (const line of road.lines || []) {
     const polyline = L.polyline(line.map(([lon,lat])=>[lat,lon]), {
@@ -815,6 +864,8 @@ function highlightRoadSegment(featureId) {
     return;
   }
   const bounds = roadHighlightLayer.getBounds();
+  document.getElementById('road-map')?.scrollIntoView({behavior:'smooth',block:'center'});
+  leafletMap.invalidateSize();
   if (bounds.isValid()) leafletMap.fitBounds(bounds, {padding:[48,48], maxZoom:14, animate:true});
   highlightLines[0].openPopup();
 }
@@ -833,70 +884,6 @@ function setupLazyMapLoading() {
     }
   }, {rootMargin: '700px 0px'});
   observer.observe(mapSection);
-}
-
-/* Hotspots Ranking List */
-function drawHotspots(records, counts) {
-  const list = document.getElementById('hotspots-list');
-  const tag = document.getElementById('hotspots-tag');
-  if (!list) return;
-
-  if (tag) {
-    let t = 'จัดอันดับตามตัวกรอง';
-    if (selectedProvince !== 'all') t = `จ.${selectedProvince}`;
-    else if (selectedRegion !== 'all') t = selectedRegion;
-    tag.textContent = t;
-  }
-
-  list.replaceChildren();
-
-  if (!DATA?.roads || !counts.size) {
-    list.innerHTML = '<div style="padding:16px;grid-column:1/-1;text-align:center;color:var(--ink-muted);">ยังไม่แสดงสถิติระดับช่วงทาง จนกว่าจะตรวจสอบการจับคู่เหตุการณ์กับโครงข่ายถนนแล้ว</div>';
-    return;
-  }
-
-  const features = new Map(DATA.roads.map(r => [String(r.id), r]));
-  
-  // Filter roads according to current filters
-  const validRoadIds = new Set(getFilteredRoads().map(r => String(r.id)));
-
-  const ranked = [...counts.entries()]
-    .filter(([id]) => validRoadIds.has(id))
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10);
-
-  if (!ranked.length) {
-    list.innerHTML = '<div style="padding:16px;grid-column:1/-1;text-align:center;color:var(--ink-muted);">ไม่มีช่วงทางหลวงที่มีผู้เสียชีวิตในพื้นที่และประเภทเลขที่เลือก</div>';
-    return;
-  }
-
-  let rankNum = 1;
-  for (const [id, count] of ranked) {
-    const road = features.get(id);
-    if (!road) continue;
-
-    const row = document.createElement('div');
-    row.className = 'hotspot-row';
-
-    const rankEl = document.createElement('div');
-    rankEl.className = `hotspot-rank ${rankNum <= 3 ? `rank-${rankNum}` : ''}`;
-    rankEl.textContent = rankNum;
-
-    const title = document.createElement('strong');
-    title.textContent = `ทล. ${road.highway_code || 'ไม่ระบุ'}`;
-    title.style.color = HIGHWAY_COLORS[road.digit_type] || 'inherit';
-
-    const name = document.createElement('span');
-    name.textContent = `${road.road_name || road.highway_name || 'ไม่ระบุชื่อ'} (${road.province})`;
-    name.title = name.textContent;
-
-    const value = document.createElement('b');
-    value.textContent = `${fmt.format(count)} ราย`;
-
-    row.append(rankEl, title, name, value);
-    list.append(row);
-    rankNum++;
-  }
 }
 
 /* Map Setup */
@@ -949,7 +936,7 @@ function setupMap() {
 
   // 2. Road Network Layer (Polyline)
   roadLayer = L.layerGroup().addTo(leafletMap);
-  roadHighlightLayer = L.layerGroup().addTo(leafletMap);
+  roadHighlightLayer = L.featureGroup().addTo(leafletMap);
 
   // 3. Fatality Points Layer (MarkerCluster)
   hasMarkerCluster = typeof L.markerClusterGroup === 'function';
@@ -1039,7 +1026,7 @@ function summarizeFilteredRecords(records) {
 
 function selectedAccidentYears() {
   if (!ACCIDENTS?.years) return [];
-  if (selectedRegion !== 'all' || selectedProvince !== 'all' || selectedVehicle !== 'all' || selectedFatality !== 'all' || selectedHighwayDigits !== 'all' || Object.values(semanticFilters).some(v=>v!=='all') || document.getElementById('road-search')?.value.trim()) {
+  if (selectedQuarter !== 'all' || selectedMonth !== 'all' || selectedRegion !== 'all' || selectedProvince !== 'all' || selectedVehicle !== 'all' || selectedFatality !== 'all' || selectedHighwayDigits !== 'all' || Object.values(semanticFilters).some(v=>v!=='all') || document.getElementById('road-search')?.value.trim()) {
     const selected = getFilteredRecords();
     const year = selectedYear === 'all' ? 'รวม' : selectedYear;
     return [[year, summarizeFilteredRecords(selected)]];
@@ -1380,68 +1367,9 @@ function updateAccidentDashboard() {
 
   const filteredRecords = getFilteredRecords();
   renderSemanticCharts();
-  drawAnnualTrend(filteredRecords);
+  window.OverviewAnalytics?.render(filteredRecords, {year:selectedYear,quarter:selectedQuarter,month:selectedMonth}, setTemporalFilters);
   window.HighwayScatter?.render(document.getElementById('highway-scatter-chart'), filteredRecords, DATA?.roads || [], highlightRoadSegment);
 
-  // Annual Summary Table
-  const body = document.getElementById('incident-year-table');
-  if (body) {
-    body.replaceChildren();
-    const filteredByYear = new Map();
-    for (const record of getFilteredRecords()) {
-      const year=String(record.year || 'ไม่ระบุ');
-      if(!filteredByYear.has(year))filteredByYear.set(year,{events:0,fatalities:0,serious:0,minor:0,injuries:0,vehicles:0,coordinates:0});
-      const row=filteredByYear.get(year);row.events++;row.fatalities+=Number(record.fatalities)||0;
-      row.serious+=Number(record.injuries_severe)||0;row.minor+=Number(record.injuries_minor)||0;
-      row.injuries+=Number(record.injuries)||0;if(isValue(record.vehicle))row.vehicles++;
-      if(isValue(record.latitude)&&isValue(record.longitude))row.coordinates++;
-    }
-    for (const [year, data] of [...filteredByYear.entries()].sort(([a],[b])=>a.localeCompare(b))) {
-      const row = document.createElement('tr');
-      if (selectedYear === year) row.className = 'selected-year-row';
-      const coordinatePct = data.events ? (data.coordinates / data.events) * 100 : 0;
-      const values = [
-        year === 'ไม่ระบุ' ? year : `พ.ศ. ${Number(year) + 543}`,
-        fmt.format(data.events),
-        fmt.format(data.fatalities),
-        fmt.format(data.serious),
-        fmt.format(data.minor),
-        fmt.format(data.injuries),
-        fmt.format(data.vehicles),
-        `${fmt.format(data.coordinates)} (${coordinatePct.toFixed(1)}%)`
-      ];
-      for (const val of values) {
-        const cell = document.createElement('td');
-        cell.textContent = val;
-        row.append(cell);
-      }
-      body.append(row);
-    }
-  }
-}
-
-function drawAnnualTrend(records) {
-  const canvas=document.getElementById('annual-trend-chart'), s=resizeCanvas(canvas);
-  if(!s)return;
-  const {ctx,w,h}=s,theme=chartTheme();ctx.clearRect(0,0,w,h);
-  const years=['2023','2024','2025'],events=Object.fromEntries(years.map(y=>[y,0])),deaths=Object.fromEntries(years.map(y=>[y,0]));
-  for(const r of records){const y=String(r.year);if(!Object.hasOwn(events,y))continue;events[y]++;deaths[y]+=Math.max(0,Number(r.fatalities)||0);}
-  const maxE=Math.max(1,...Object.values(events)),maxD=Math.max(1,...Object.values(deaths));
-  const pad={l:56,r:58,t:22,b:42},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b, x=i=>pad.l+cw*i/Math.max(1,years.length-1);
-  ctx.font=`10px ${theme.font}`;ctx.lineWidth=1;ctx.strokeStyle=theme.grid;ctx.fillStyle=theme.textMuted;
-  for(let i=0;i<=4;i++){
-    const ratio=i/4,y=pad.t+ch*(1-ratio);ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();
-    ctx.textAlign='right';ctx.fillText(fmt.format(Math.round(maxE*ratio)),pad.l-8,y);
-    ctx.textAlign='left';ctx.fillText(fmt.format(Math.round(maxD*ratio)),w-pad.r+8,y);
-  }
-  years.forEach((year,i)=>{ctx.textAlign='center';ctx.fillStyle=theme.text;ctx.fillText(`พ.ศ. ${Number(year)+543}`,x(i),h-15);});
-  const series=[{values:events,max:maxE,color:'#C1121F'},{values:deaths,max:maxD,color:'#FF8C00'}];
-  for(const line of series){
-    ctx.beginPath();ctx.strokeStyle=line.color;ctx.lineWidth=3;ctx.lineJoin='round';
-    years.forEach((year,i)=>{const y=pad.t+ch*(1-line.values[year]/line.max);if(i===0)ctx.moveTo(x(i),y);else ctx.lineTo(x(i),y);});ctx.stroke();
-    years.forEach((year,i)=>{const y=pad.t+ch*(1-line.values[year]/line.max);ctx.beginPath();ctx.arc(x(i),y,5,0,Math.PI*2);ctx.fillStyle=line.color;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();});
-  }
-  if(canvas){canvas.title=years.map(y=>`พ.ศ. ${Number(y)+543}: ${fmt.format(events[y])} เหตุการณ์, ${fmt.format(deaths[y])} ผู้เสียชีวิต`).join('\n');}
 }
 
 function drawIncidentMonthly() {
@@ -1563,11 +1491,12 @@ function updateQuality(records) {
   const q = DATA?.quality || {};
   const notes = [
     `ไฟล์ต้นทาง: ${fmt.format(DATA?.meta?.source_rows || 0)} แถว × ${fmt.format(DATA?.meta?.source_columns || 0)} คอลัมน์; นับหนึ่งเหตุการณ์ต่อ ACC_CODE ได้ ${fmt.format(DATA?.meta?.event_count || records.length)} รหัสไม่ซ้ำ`,
-    `ตรวจรหัสซ้ำ: พบ ${fmt.format(q.duplicate_id_groups || 0)} กลุ่ม ACC_CODE ซ้ำ; ${fmt.format(q.duplicate_conflict_groups || 0)} กลุ่มมีวันเวลา/พื้นที่/พิกัด/ยอดผู้บาดเจ็บหรือเสียชีวิตขัดแย้งกัน กติกาเลือกแถวที่ยอดผู้สูญเสียรวมสูงสุด และควรตรวจสอบก่อนใช้เป็นสถิติทางการ`,
+    `ตรวจรหัสซ้ำ: พบ ${fmt.format(q.duplicate_id_groups || 0)} กลุ่ม ACC_CODE ซ้ำ; ${fmt.format(q.duplicate_conflict_groups || 0)} กลุ่มมีข้อมูลหลักขัดแย้งกัน เลือกแถวที่มีข้อมูลสมบูรณ์ที่สุด หากเท่ากันเก็บแถวต้นทางที่มาก่อน`,
+    `การคลีน: ลบซ้ำ ${fmt.format(DATA?.meta?.cleaning?.total_duplicates_removed || 0)} แถว; แก้พิกัดสลับ ${fmt.format(DATA?.meta?.cleaning?.counts?.coordinates_swapped || 0)} รายการ; แก้วันที่รายงานก่อนเกิดเหตุ ${fmt.format(DATA?.meta?.cleaning?.counts?.report_date_corrected || 0)} รายการ; ตรวจรายละเอียดใน cleaning_summary.json และ cleaning_changes.csv`,
     `คุณภาพข้อมูล: ไม่มีพิกัด ${fmt.format(q.coordinate_missing || 0)}; พิกัดผิดช่วง/ศูนย์ ${fmt.format(q.coordinate_invalid || 0)}; พิกัดนอกกรอบประเทศไทย ${fmt.format(q.coordinate_outside_thailand || 0)}; วันที่หาย/อ่านไม่ได้ ${fmt.format((q.date_missing || 0)+(q.date_invalid || 0))}; ค่าเสียชีวิตหาย ${fmt.format(q.fatality_missing || 0)}; ช่องบาดเจ็บหาย ${fmt.format(q.injury_value_missing || 0)}; ยอดบาดเจ็บไม่ตรง ${fmt.format(q.injury_total_mismatch || 0)}`,
     `ชั้น GIS: โหลดแนวเส้นจริง ${fmt.format(DATA?.meta?.road_features || DATA?.roads?.length || 0)} ช่วงจาก GeoPackage และขอบเขตจังหวัด ${fmt.format(DATA?.meta?.province_features || 0)} จังหวัดจาก DDPM ใน EPSG:4326`,
-    `การกรองช่วงถนนตามจังหวัด/ภาคอิงจังหวัดของจุดกึ่งกลางของ feature; geometry ไม่ได้ถูกตัดที่เส้นเขตจังหวัด และไม่ใช้เป็นผลจัดอันดับอุบัติเหตุ`,
-    `การจับคู่ถนนในไฟล์ joined เดิม ${fmt.format(DATA?.meta?.road_matches || 0)} รายการเป็นผลเดิมบางส่วน จึงไม่ใช้สรุปผู้เสียชีวิตตามถนน`,
+    `แผนที่รวมเส้นทางหลวงแผ่นดินจาก DOH และทางหลวงชนบทจาก DRR; กรองพื้นที่ตามทุกจังหวัดที่ Geometry พาดผ่าน ไม่ได้ตัดถนนที่เส้นเขตจังหวัด การเติมชื่อถนนใช้แนวเส้นต้นฉบับของ DOH และ DRR สถานะ A ภายใน 100 เมตร`,
+    `ตรวจขอบเขตประเทศไทย: รับ ${fmt.format(q.spatial?.accepted_events || 0)} เหตุการณ์; แยกออก ${fmt.format(q.spatial?.excluded_events || 0)} เหตุการณ์ใน spatial_excluded.json; จับคู่แนวถนนจริงได้ ${fmt.format(DATA?.meta?.road_matches || 0)} เหตุการณ์ ภายใน 100 เมตร โดยไม่ขัดกับรหัสสายทางต้นทาง`,
     `การวิเคราะห์เป็นสถิติเชิงพรรณนา ไม่ยืนยันเหตุและผล; เปรียบเทียบรายปีด้วยความระมัดระวัง เพราะความครบถ้วนและระยะเวลารายงานอาจต่างกัน`
   ];
 
@@ -1588,11 +1517,14 @@ function csvEscape(v) {
 function exportCsv() {
   const records = getFilteredRecords();
   const cols = [
-    'id', 'year', 'incident_date', 'incident_time', 'province', 'region',
+    'id', 'year', 'incident_date', 'incident_time', 'report_date', 'report_time', 'province', 'region',
     'highway_code', 'highway_digits', 'digit_label', 'road_name', 'agency',
     'fatalities', 'injuries', 'injuries_severe', 'injuries_minor',
-    'vehicle', 'cause', 'collision', 'weather', 'latitude', 'longitude',
-    'road_status', 'road_distance_m', 'matched_highway_code'
+    'vehicle', 'cause', 'collision', 'weather', 'context', 'km', 'latitude', 'longitude',
+    'road_status', 'road_distance_m', 'matched_highway_code', 'boundary_status',
+    'latitude_original', 'longitude_original', 'province_original', 'province_from_coordinates', 'province_source', 'province_coordinate_conflict',
+    'highway_code_raw_original', 'highway_ref_source', 'road_name_original', 'road_name_source', 'road_spatial_status', 'matched_road_source',
+    'cause_original', 'collision_original', 'weather_original', 'context_original', 'source_row', 'coordinates_swapped', 'report_date_corrected'
   ];
 
   const csv = '\ufeff' + [cols.join(','), ...records.map(r => cols.map(k => csvEscape(r[k])).join(','))].join('\r\n');
@@ -1608,6 +1540,7 @@ function exportCsv() {
 
 /* Global Render Trigger */
 function render() {
+  syncTemporalControls();
   const records = getFilteredRecords();
   if (pendingRoadHighlightId !== null && !records.some(record => normalizeRoadFeatureId(record.road_feature_id) === normalizeRoadFeatureId(pendingRoadHighlightId))) {
     roadHighlightLayer?.clearLayers();
@@ -1617,7 +1550,64 @@ function render() {
   drawWeekdayHour(records);
   updateQuality(records);
   updateAccidentDashboard();
+  renderAreaRanking(records);
+  renderIncidentDetails(records);
   drawMap(false);
+}
+
+function renderIncidentDetails(records) {
+  const body=document.getElementById('incident-details-body');if(!body)return;
+  const key=JSON.stringify([selectedYear,selectedQuarter,selectedMonth,selectedRegion,selectedProvince,selectedHighwayDigits,selectedVehicle,selectedFatality,semanticFilters,document.getElementById('road-search')?.value]);
+  if(key!==incidentDetailFilterKey){incidentDetailPage=1;incidentDetailFilterKey=key;}
+  const size=50,pages=Math.max(1,Math.ceil(records.length/size));incidentDetailPage=Math.min(pages,Math.max(1,incidentDetailPage));
+  body.replaceChildren();
+  for(const r of records.slice((incidentDetailPage-1)*size,incidentDetailPage*size)) {
+    const tr=document.createElement('tr');
+    for(const value of [r.id,`${r.incident_date || 'ไม่ระบุ'} ${r.incident_time || ''}`,r.province,
+      `${r.highway_code_raw || 'ไม่ระบุ'} · ${r.road_name || 'ไม่ระบุชื่อสายทาง'}`,r.km || 'ไม่ระบุ',
+      r.context || 'ไม่ระบุ',r.cause || 'ไม่ทราบสาเหตุ',r.collision || 'ไม่ระบุ',r.weather || 'ไม่ระบุ',fmt.format(r.fatalities || 0),fmt.format(r.injuries || 0)]) {
+      const td=document.createElement('td');td.textContent=value;tr.append(td);
+    }
+    body.append(tr);
+  }
+  if(!records.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=11;td.textContent='ไม่มีข้อมูลตรงกับตัวกรอง';tr.append(td);body.append(tr);}
+  setText('incident-details-count',`${fmt.format(records.length)} เหตุการณ์ · หน้า ${fmt.format(incidentDetailPage)}/${fmt.format(pages)} · หน้าละ 50 รายการ`);
+  const prev=document.getElementById('incident-details-prev'),next=document.getElementById('incident-details-next');
+  if(prev)prev.disabled=incidentDetailPage<=1;if(next)next.disabled=incidentDetailPage>=pages;
+}
+
+function renderAreaRanking(records) {
+  const body = document.getElementById('area-ranking-body');
+  if (!body) return;
+  const byRoad = selectedProvince !== 'all';
+  setText('area-ranking-title', byRoad
+    ? `อันดับเส้นถนน / สายทางที่เกิดอุบัติเหตุบ่อยที่สุดในจังหวัด${selectedProvince}`
+    : selectedRegion !== 'all'
+      ? `อันดับจังหวัดที่เกิดอุบัติเหตุสูงสุดภายใน${selectedRegion}`
+      : 'อันดับจังหวัดที่เกิดอุบัติเหตุสูงสุดในประเทศไทย');
+  setText('area-ranking-unit', byRoad ? 'หมายเลข / ชื่อสายทาง' : 'จังหวัด');
+  const groups = new Map(), seen = new Set();
+  for (const row of records) {
+    if (!isValue(row.id) || seen.has(String(row.id))) continue;
+    seen.add(String(row.id));
+    const road = recordHighway(row);
+    const key = byRoad ? (road.type !== 'unknown' ? `ref:${road.ref}` : `name:${row.road_name || 'ไม่ระบุสายทาง'}`) : (row.province || 'ไม่ระบุจังหวัด');
+    if (!groups.has(key)) groups.set(key, {label: byRoad ? (road.type !== 'unknown' ? `${road.type === 'rural' ? 'ทางหลวงชนบท' : 'ทล.'} ${road.ref}` : row.road_name || 'ไม่ระบุสายทาง') : key, events:0, fatalEvents:0, deaths:0, injuries:0});
+    const group = groups.get(key), deaths = Number(row.fatalities) || 0;
+    group.events++; group.fatalEvents += deaths > 0 ? 1 : 0;
+    group.deaths += deaths; group.injuries += Number(row.injuries) || 0;
+  }
+  body.replaceChildren();
+  const ranked = [...groups.values()].sort((a,b)=>b.events-a.events || b.deaths-a.deaths || a.label.localeCompare(b.label,'th'));
+  ranked.forEach((group,index)=>{
+    const tr = document.createElement('tr');
+    for (const value of [fmt.format(index+1),group.label,fmt.format(group.events),fmt.format(group.fatalEvents),fmt.format(group.deaths),fmt.format(group.injuries)]) {
+      const td=document.createElement('td');td.textContent=value;tr.append(td);
+    }
+    body.append(tr);
+  });
+  if (!ranked.length) {const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=6;td.textContent='ไม่มีข้อมูลตรงกับตัวกรอง';tr.append(td);body.append(tr);}
+  setText('area-ranking-note', `${fmt.format(seen.size)} เหตุการณ์ไม่ซ้ำตามตัวกรองทั้งหมด · เรียงตามจำนวนอุบัติเหตุ ${byRoad ? '· รวมตามหมายเลขสายทางจาก TRAMS ไม่ใช่ช่วงทางที่จับคู่ Geometry' : ''} · จำนวนดิบไม่ใช่อัตราความเสี่ยง`);
 }
 
 /* Interactive Canvas Tooltip Setup */
@@ -1683,7 +1673,7 @@ function setupQuickNav() {
 }
 
 function setupScrollReveal() {
-  const cards = document.querySelectorAll('.chart-panel, .hotspots-panel');
+  const cards = document.querySelectorAll('.chart-panel');
   if (!('IntersectionObserver' in window)) {
     cards.forEach(card => card.classList.add('is-visible'));
     return;
@@ -1707,10 +1697,16 @@ async function boot() {
     setupQuickNav();
     setupScrollReveal();
 
-    document.getElementById('year-filter')?.addEventListener('change', e => {
-      selectedYear = e.target.value;
-      render();
-    });
+    window.OverviewAnalytics?.bind();
+    document.getElementById('incident-details-prev')?.addEventListener('click',()=>{incidentDetailPage--;renderIncidentDetails(getFilteredRecords());});
+    document.getElementById('incident-details-next')?.addEventListener('click',()=>{incidentDetailPage++;renderIncidentDetails(getFilteredRecords());});
+    for (const key of ['year','quarter','month']) {
+      for (const id of [`${key}-filter`,`trend-${key}-filter`]) {
+        document.getElementById(id)?.addEventListener('change',e=>setTemporalFilters({[key]:e.target.value}));
+      }
+    }
+    document.getElementById('trend-granularity')?.addEventListener('change',()=>render());
+    document.getElementById('reset-time-filters')?.addEventListener('click',()=>setTemporalFilters({year:'all',quarter:'all',month:'all'}));
 
     document.getElementById('export-csv')?.addEventListener('click', exportCsv);
 
@@ -1752,7 +1748,7 @@ async function boot() {
     ACCIDENTS = await accidentResponse.json();
     DATA.roads = [];
     for (const record of DATA.records || []) {
-      for (const field of ['vehicle','cause','collision','weather']) record[field] = normalizeCategory(field, record[field]);
+      for (const field of ['vehicle','cause','collision','weather','context']) record[field] = normalizeCategory(field, record[field]);
     }
 
     const populate = (id, values, label) => {
@@ -1773,7 +1769,7 @@ async function boot() {
     });
     document.getElementById('road-search')?.addEventListener('input', rerender);
     document.getElementById('reset-filters')?.addEventListener('click', () => {
-      selectedYear='all'; selectedRegion='all'; selectedProvince='all'; selectedHighwayDigits='all';
+      selectedYear='all'; selectedQuarter='all'; selectedMonth='all'; selectedRegion='all'; selectedProvince='all'; selectedHighwayDigits='all';
       selectedVehicle='all'; selectedFatality='all';
       for (const key of Object.keys(semanticFilters)) semanticFilters[key] = 'all';
       for (const id of ['year-filter','region-filter','province-filter','highway-digit-filter','vehicle-filter','fatality-filter']) {

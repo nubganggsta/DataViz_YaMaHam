@@ -1967,3 +1967,19 @@ body[data-theme] #overview-kpis .kpi-card {
   box-shadow: var(--shadow-sm);
   border-color: var(--border-subtle);
 }
+
+/* Overview time controls share global filters and adapt to smaller screens. */
+.overview-time-controls { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px; }
+.overview-time-controls .filter-group { display:flex; flex-direction:column; gap:5px; }
+.overview-time-controls label { color:var(--ink-muted); font-size:12px; }
+.overview-time-controls select { background:var(--bg-surface); color:var(--ink-primary); border:1px solid var(--border-strong); border-radius:8px; padding:8px 12px; font:inherit; font-size:12px; }
+.overview-trend-area { height:350px; position:relative; margin-top:14px; }
+.overview-trend-panel { margin-bottom:20px; }
+@media (max-width:768px) { .overview-trend-area { height:300px; } .overview-time-controls .filter-group { flex:1 1 120px; } }
+
+.bottom-grid.quality-only-grid { grid-template-columns: 1fr; }
+.incident-details-panel { margin:20px 0; }
+.incident-details-panel summary { cursor:pointer; font-weight:700; color:var(--ink-primary); }
+.incident-details-panel p,.incident-details-pagination span { color:var(--ink-muted); font-size:12px; }
+.incident-details-pagination { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:12px; }
+.incident-details-panel td { min-width:90px; max-width:300px; white-space:normal; }

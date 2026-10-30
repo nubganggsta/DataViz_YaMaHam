@@ -10,6 +10,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import pandas as pd
+from spatial_enrichment import enrich_records
+from clean_accidents import clean_dataframe, write_outputs
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "dataset"
@@ -158,7 +160,7 @@ def simplify_line(line, tolerance=0.00003):
     return [line[i] for i in sorted(keep)]
 
 
-def load_roads(provinces):
+def load_roads(provinces, simplify=True):
     if not ROADS_FILE.exists():
         return []
     connection = sqlite3.connect(ROADS_FILE)
@@ -172,7 +174,8 @@ def load_roads(provinces):
         if not lines:
             continue
         mid = road_middle(lines)
-        lines = [simplify_line(line) for line in lines]
+        if simplify:
+            lines = [simplify_line(line) for line in lines]
         province = region = MISSING
         if mid:
             for bbox, meta in province_boxes:
@@ -202,6 +205,9 @@ def main():
                       dtype={"ACC_CODE": "string", "รหัสสายทาง": "string"})
     if "ACC_CODE" not in raw.columns:
         raise ValueError("ไม่พบคอลัมน์ ACC_CODE ในไฟล์ข้อมูล")
+    print('Cleaning source records and exporting BI CSV...', flush=True)
+    cleaned_source, cleaning_summary, cleaning_changes = clean_dataframe(raw)
+    write_outputs(cleaned_source, cleaning_summary, cleaning_changes)
 
     # Map Thai source fields without renaming/mutating the source file.
     fields = {
@@ -249,20 +255,10 @@ def main():
     duplicate_groups = {key: group for key, group in grouped if len(group) > 1}
     mismatch_fields = [fields[k] for k in ("date", "time", "province", "latitude", "longitude", "fatalities", "serious", "minor")]
     mismatch_groups = sum(any(g[col].nunique(dropna=False) > 1 for col in mismatch_fields) for g in duplicate_groups.values())
-    exact_duplicate_rows = int(raw.duplicated(keep="first").sum())
+    exact_duplicate_rows = cleaning_summary['exact_duplicates_removed']
 
-    # For repeated ACC_CODEs, use the row with the highest casualty counts and
-    # retain that event's fields. Repeats with conflicting core values are reported.
-    def casualty_score(row):
-        return sum(num(row.get(fields[k])) or 0 for k in ("fatalities", "serious", "minor"))
-
-    chosen = []
-    for _, group in grouped:
-        if len(group) == 1:
-            row = group.iloc[0]
-        else:
-            row = max((r for _, r in group.iterrows()), key=casualty_score)
-        chosen.append(row)
+    # Deduplication and normalization use the same rows exported to BI.
+    chosen = [row for _, row in cleaned_source.iterrows() if clean(row[fields['id']])]
 
     # The previously supplied joined file provides region and validated fatal-event
     # road-match attributes. It is never used to add or replace casualty totals.
@@ -327,6 +323,9 @@ def main():
         rec = {
             "id": rid, "year": int(y) if y else None, "incident_date": iso_date,
             "incident_time": tm, "province": province, "region": region or MISSING,
+            "report_date": clean(row['วันที่รายงาน']), "report_time": clean(row['เวลาที่รายงาน']),
+            "source_row": int(row['source_row']), "coordinates_swapped": bool(row['coordinates_swapped']),
+            "report_date_corrected": bool(row['report_date_corrected']),
             "highway_code": highway_code, "highway_digits": digit_count or None,
             "digit_type": digit_type,
             "highway_code_raw": clean(row[fields["highway_raw"]]),
@@ -336,11 +335,14 @@ def main():
             "injuries_minor": serial(minor),
             "injuries": serial((serious or 0) + (minor or 0)) if serious is not None or minor is not None else None,
             "vehicle": clean(row[fields["vehicle"]]) or MISSING,
-            "cause": clean(row[fields["cause"]]) or MISSING,
+            "cause": clean(row[fields["cause"]]) or 'ไม่ทราบสาเหตุ',
             "collision": clean(row[fields["collision"]]) or MISSING,
             "context": clean(row[fields["context"]]) or MISSING,
             "weather": clean(row[fields["weather"]]) or MISSING,
             "latitude": lat, "longitude": lon,
+            "latitude_original": num(row['original_latitude']), "longitude_original": num(row['original_longitude']),
+            "cause_original": clean(row['original_cause']), "context_original": clean(row['original_context']),
+            "collision_original": clean(row['original_collision']), "weather_original": clean(row['original_weather']),
             "road_status": clean(j.get("road_status")) if j is not None else "unmatched",
             "road_distance_m": num(j.get("road_distance_m")) if j is not None else None,
             "road_feature_id": clean(j.get("road_feature_id")) if j is not None else None,
@@ -348,13 +350,28 @@ def main():
         }
         records.append(rec)
 
+    source_unique_events = len(records)
+    roads = load_roads(province_meta, simplify=False)
+    rural_match_roads = []
+    rural_source = DATA_DIR / 'drr_roads_source.json'
+    if rural_source.exists():
+        for feature in json.loads(rural_source.read_text(encoding='utf-8')).get('features', []):
+            attributes = feature.get('attributes', {})
+            lines = [line for line in (feature.get('geometry') or {}).get('paths', []) if len(line) >= 2]
+            if lines and attributes.get('status') == 'A':
+                rural_match_roads.append({'id':f"drr:{attributes['OBJECTID']}", 'source':'DRR',
+                    'highway_code':attributes.get('road_code'), 'road_name':attributes.get('route_name'), 'lines':lines})
+    print('Checking Thailand boundaries and matching original road geometries (100 m)...', flush=True)
+    records, spatial_excluded, spatial_report = enrich_records(records, boundary_fc, roads + rural_match_roads, tolerance=100)
+    spatial_report['road_match_features'] = {'DOH':len(roads), 'DRR':len(rural_match_roads)}
+    for road in roads:
+        road['lines'] = [simplify_line(line) for line in road['lines']]
     provinces = {name: {"province": meta["province"], "region": meta["region"], "bbox": meta["bbox"]}
                  for name, meta in province_meta.items()}
     for r in records:
         if r["province"] not in provinces and r["province"] != MISSING:
             provinces[r["province"]] = {"province": r["province"], "region": r["region"], "bbox": None}
     regions = {name: {"bbox": bbox} for name, bbox in region_boxes.items()}
-    roads = load_roads(province_meta)
 
     annual = {}
     for year in (2023, 2024, 2025):
@@ -406,25 +423,27 @@ def main():
                  "years": [2023, 2024, 2025], "source_rows": total_rows, "event_count": total_events,
                  "fatal_event_count": fatal_events,
                  "total_fatalities": sum((r["fatalities"] or 0) for r in records),
-                 "road_matches": joined_matches, "duplicate_id_groups": len(duplicate_groups),
-                 "duplicate_id_rows": total_rows - total_events, "duplicate_conflict_groups": mismatch_groups,
-                 "counting_rule": "หนึ่งเหตุการณ์ต่อ ACC_CODE; เลือกแถวที่มีจำนวนผู้เสียชีวิตและบาดเจ็บรวมสูงสุดเมื่อพบรหัสซ้ำ; กลุ่มซ้ำที่ข้อมูลหลักขัดแย้งถูกระบุให้ตรวจสอบ"},
+                 "road_matches": joined_matches, "cleaning": {k:v for k,v in cleaning_summary.items() if k not in {'mapping_changes','output_columns','original_source_columns'}}, "spatial_processing": spatial_report, "source_unique_events": source_unique_events, "duplicate_id_groups": len(duplicate_groups),
+                 "duplicate_id_rows": total_rows - source_unique_events, "duplicate_conflict_groups": mismatch_groups,
+                 "counting_rule": "หนึ่งเหตุการณ์ต่อ ACC_CODE; เลือกแถวที่มีข้อมูลสมบูรณ์มากที่สุด (ไม่นับ ACC_CODE/_id/source_file); กรณีเท่ากันเก็บแถวต้นทางที่มาก่อน; กลุ่มซ้ำที่ข้อมูลหลักขัดแย้งถูกระบุให้ตรวจสอบ"},
         "records": records, "provinces": provinces, "regions": regions, "roads": [],
-        "quality": {**quality, "source_rows": total_rows, "unique_acc_codes": total_events,
+        "quality": {**quality, "source_rows": total_rows, "unique_acc_codes": source_unique_events, "spatial": spatial_report,
                     "missing_acc_code_rows": null_ids, "duplicate_id_groups": len(duplicate_groups),
-                    "duplicate_id_rows": total_rows - total_events, "duplicate_conflict_groups": mismatch_groups,
+                    "duplicate_id_rows": total_rows - source_unique_events, "duplicate_conflict_groups": mismatch_groups,
                     "exact_duplicate_rows": exact_duplicate_rows},
     }
     summary = {"meta": {"records": total_events, "source_rows": total_rows,
                         "source": "TRAMS · กระทรวงคมนาคม", "years": [2023, 2024, 2025],
                         "counting_rule": dashboard["meta"]["counting_rule"]}, "years": annual}
     OUT_DIR.mkdir(exist_ok=True)
+    (OUT_DIR / 'spatial_excluded.json').write_text(json.dumps(spatial_excluded, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    (OUT_DIR / 'spatial_quality.json').write_text(json.dumps(spatial_report, ensure_ascii=False, indent=2), encoding='utf-8')
     (OUT_DIR / "dashboard_data.json").write_text(json.dumps(dashboard, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     (OUT_DIR / "accident_summary.json").write_text(json.dumps(summary, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     (OUT_DIR / "roads.json").write_text(json.dumps(roads, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     (OUT_DIR / "provinces.geojson").write_text(json.dumps(boundary_fc, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"Built {total_events:,} unique ACC_CODE events from {total_rows:,} rows; {fatal_events:,} fatal events; {dashboard['meta']['total_fatalities']:,} deaths.")
-    print(f"Duplicate-ID groups: {len(duplicate_groups):,}; conflicting core groups: {mismatch_groups:,}; valid-coordinate candidates: {total_events-quality['coordinate_missing']-quality['coordinate_invalid']:,}.")
+    print(f"Duplicate-ID groups: {len(duplicate_groups):,}; conflicting core groups: {mismatch_groups:,}; spatial report: {json.dumps(spatial_report, ensure_ascii=False)}.")
 
 
 if __name__ == "__main__":
