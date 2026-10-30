@@ -70,6 +70,33 @@ let roadHighlightLayer = null;
 let pointLayer = null;
 let boundaryLayer = null;
 let hasMarkerCluster = false;
+let selectedMapMetric = 'events';
+let mapIncidentMarkers = [];
+const MAP_POINT_METRICS = {
+  events:{label:'จำนวนเหตุการณ์',unit:'ครั้ง',color:'#003049'},
+  injuries:{label:'ผู้บาดเจ็บ',unit:'ราย',color:'#D97706'},
+  fatalities:{label:'ผู้เสียชีวิต',unit:'ราย',color:'#C1121F'}
+};
+
+function summarizeMapPoints(records) {
+  const seen=new Set(),totals={events:0,injuries:0,fatalities:0};
+  for(const r of records){if(r?.id==null||seen.has(String(r.id)))continue;seen.add(String(r.id));totals.events++;totals.injuries+=Math.max(0,Number(r.injuries)||0);totals.fatalities+=Math.max(0,Number(r.fatalities)||0);}
+  return totals;
+}
+
+function mapPointIcon(records,cluster=false) {
+  const totals=summarizeMapPoints(records),metric=MAP_POINT_METRICS[selectedMapMetric];
+  const value=totals[selectedMapMetric],width=Math.max(cluster?48:32,fmt.format(value).length*8+18);
+  return L.divIcon({className:'map-value-icon',html:`<div class="map-value-badge ${cluster?'is-cluster':''}" style="--point-color:${value===0?'#64748b':metric.color}" title="${metric.label} ${fmt.format(value)} ${metric.unit} จาก ${fmt.format(totals.events)} เหตุการณ์"><strong>${fmt.format(value)}</strong><small>${metric.unit}</small></div>`,iconSize:[width,cluster?48:34],iconAnchor:[width/2,cluster?24:17]});
+}
+
+function updateMapPointMetric(value) {
+  selectedMapMetric=MAP_POINT_METRICS[value]?value:'events';
+  for(const marker of mapIncidentMarkers)marker.setIcon(mapPointIcon([marker.options.accidentRecord]));
+  pointLayer?.refreshClusters?.();
+  const metric=MAP_POINT_METRICS[selectedMapMetric];
+  setText('map-point-metric-note',`ตัวเลขบนจุดและกลุ่มจุด = ${metric.label} (${metric.unit}) ตามตัวกรอง · คลิกกลุ่มเพื่อซูม และคลิกจุดเพื่อดูรายละเอียด · 0 หมายถึงไม่มีผู้สูญเสียประเภทที่เลือกในจุดนั้น`);
+}
 
 /* Utility Helpers */
 function isValue(v) {
@@ -687,28 +714,15 @@ function drawMap(fitBounds = false) {
 
   // 4. Render Fatal Incident Markers Layer
   pointLayer.clearLayers();
+  mapIncidentMarkers = [];
   if (showPoints) {
     const validPoints = records.filter(r => isValue(r.latitude) && isValue(r.longitude));
     const markers = [];
     for (const r of validPoints) {
       const latlng = [Number(r.latitude), Number(r.longitude)];
       const fatal = (Number(r.fatalities) || 0) > 0;
-      const marker = hasMarkerCluster
-        ? L.marker(latlng, {
-            icon: L.divIcon({
-              className: fatal ? 'fatality-marker' : 'accident-marker',
-              html: '',
-              iconSize: [10, 10],
-              iconAnchor: [5, 5]
-            })
-          })
-        : L.circleMarker(latlng, {
-            radius: 3.5,
-            weight: 1.5,
-            color: '#ffffff',
-            fillColor: fatal ? '#C1121F' : '#669BBC',
-            fillOpacity: 0.88
-          });
+      const metricRecord={id:r.id,fatalities:r.fatalities,injuries:r.injuries};
+      const marker=L.marker(latlng,{icon:mapPointIcon([metricRecord]),accidentRecord:metricRecord});
 
       marker.bindPopup(() => `
         <div style="font-family:'Plus Jakarta Sans','Prompt',sans-serif;">
@@ -734,6 +748,7 @@ function drawMap(fitBounds = false) {
       `);
       markers.push(marker);
     }
+    mapIncidentMarkers=markers;
     if (hasMarkerCluster) pointLayer.addLayers(markers);
     else markers.forEach(marker => pointLayer.addLayer(marker));
   }
@@ -943,7 +958,8 @@ function setupMap() {
         chunkedLoading: true,
         showCoverageOnHover: false,
         spiderfyOnMaxZoom: true,
-        maxClusterRadius: 40
+        maxClusterRadius: 40,
+        iconCreateFunction: cluster=>mapPointIcon(cluster.getAllChildMarkers().map(marker=>marker.options.accidentRecord),true)
       })
     : L.layerGroup();
   pointLayer.addTo(leafletMap);
@@ -952,6 +968,8 @@ function setupMap() {
   document.getElementById('show-roads')?.addEventListener('change', () => drawMap(false));
   document.getElementById('show-points')?.addEventListener('change', () => drawMap(false));
   document.getElementById('show-boundary')?.addEventListener('change', () => drawMap(false));
+  document.getElementById('map-point-metric')?.addEventListener('change',e=>updateMapPointMetric(e.target.value));
+  updateMapPointMetric(selectedMapMetric);
 
   // Region Filter Change
   document.getElementById('region-filter')?.addEventListener('change', e => {

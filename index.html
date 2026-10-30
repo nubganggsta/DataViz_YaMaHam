@@ -249,6 +249,10 @@
               </select>
             </div>
 
+            <div class="filter-control-item">
+              <label for="map-point-metric">ตัวเลขบนจุดแผนที่</label>
+              <select id="map-point-metric"><option value="events">จำนวนเหตุการณ์ (ครั้ง)</option><option value="injuries">ผู้บาดเจ็บรวม (ราย)</option><option value="fatalities">ผู้เสียชีวิต (ราย)</option></select>
+            </div>
             <div class="map-layer-toggles">
               <label><input type="checkbox" id="show-roads" checked> ทางหลวงแผ่นดินและทางหลวงชนบท</label>
               <label><input type="checkbox" id="show-points" checked> พิกัดอุบัติเหตุ</label>
@@ -265,6 +269,7 @@
           </div>
         </div>
 
+        <p class="chart-footnote" id="map-point-metric-note" aria-live="polite">ตัวเลขบนจุดและกลุ่มจุด = จำนวนเหตุการณ์ (ครั้ง) ตามตัวกรอง</p>
         <!-- Filter Status Bar -->
         <div class="filter-status-bar" id="filter-status-bar">
           <div class="active-chips" id="active-chips"></div>
@@ -291,8 +296,8 @@
               <span class="legend-item"><i class="legend-line line-pink"></i> ทางหลวง 3 หลัก</span>
               <span class="legend-item"><i class="legend-line" style="background:#6b7280"></i> ทางหลวง 4 หลัก / อื่น ๆ</span>
               <span class="legend-item"><i class="legend-line" style="background:#2391FF"></i> ทางหลวงชนบท</span>
-              <span class="legend-item"><i class="map-dot map-dot-fatal"></i> เหตุการณ์มีผู้เสียชีวิต</span>
-              <span class="legend-item"><i class="map-dot map-dot-accident"></i> เหตุการณ์ไม่มีผู้เสียชีวิต</span>
+              <span class="legend-item"><i class="map-dot map-dot-fatal"></i> ตัวเลขผู้เสียชีวิต (สีแดง)</span>
+              <span class="legend-item"><i class="map-dot" style="background:#D97706"></i> ตัวเลขผู้บาดเจ็บ (สีส้ม)</span>
               <span class="legend-item"><i class="boundary-legend"></i> ขอบเขตจังหวัด / ภาค</span>
               <span class="legend-item"><i class="choropleth-swatch" style="background:#A91B18"></i> สูงมาก</span>
               <span class="legend-item"><i class="choropleth-swatch" style="background:#FF8C00"></i> สูง</span>
