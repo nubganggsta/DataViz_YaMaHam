@@ -59,7 +59,7 @@ const semanticFilters = { vehicle: 'all', cause: 'all', collision: 'all', weathe
 let incidentDetailPage = 1;
 let incidentDetailFilterKey = '';
 let provinceFatalityCounts = new Map();
-let provinceEventCounts = new Map();
+let provinceInjuryCounts = new Map();
 let pendingRoadHighlightId = null;
 
 let leafletMap = null;
@@ -74,8 +74,8 @@ let selectedMapMetric = 'fatalities';
 let showMapNumbers = true;
 let mapIncidentMarkers = [];
 const MAP_POINT_METRICS = {
-  injuries:{label:'ผู้บาดเจ็บ',unit:'ราย',color:'#D97706'},
-  fatalities:{label:'ผู้เสียชีวิต',unit:'ราย',color:'#C1121F'}
+  injuries:{label:'ผู้บาดเจ็บ',unit:'ราย'},
+  fatalities:{label:'ผู้เสียชีวิต',unit:'ราย'}
 };
 
 function summarizeMapPoints(records) {
@@ -84,21 +84,52 @@ function summarizeMapPoints(records) {
   return totals;
 }
 
+let mapDensityMaximum = 1;
+
+// Continuous green → orange → red scale, weighted by people, never event counts.
+function mapDensityColor(value, maximum) {
+  const ratio = Math.max(0, Math.min(1, value / Math.max(1, maximum)));
+  const stops = [[46,125,50], [255,140,0], [193,18,31]];
+  const part = ratio <= .5 ? 0 : 1;
+  const t = part === 0 ? ratio * 2 : (ratio - .5) * 2;
+  return '#' + stops[part].map((channel, i) => Math.round(channel + (stops[part + 1][i] - channel) * t).toString(16).padStart(2, '0')).join('');
+}
+
+function refreshMapDensity() {
+  const visible = new Set();
+  mapDensityMaximum = 1;
+  for (const marker of mapIncidentMarkers) {
+    const parent = pointLayer?.getVisibleParent?.(marker) || marker;
+    if (visible.has(parent)) continue;
+    visible.add(parent);
+    const records = parent.getAllChildMarkers ? parent.getAllChildMarkers().map(child => child.options.accidentRecord) : [marker.options.accidentRecord];
+    mapDensityMaximum = Math.max(mapDensityMaximum, summarizeMapPoints(records)[selectedMapMetric]);
+  }
+  for (const marker of mapIncidentMarkers) marker.setIcon(mapPointIcon([marker.options.accidentRecord]));
+  pointLayer?.refreshClusters?.();
+}
+
+function selectedProvinceCounts() {
+  return selectedMapMetric === 'injuries' ? provinceInjuryCounts : provinceFatalityCounts;
+}
+
 function mapPointIcon(records,cluster=false) {
   const totals=summarizeMapPoints(records),metric=MAP_POINT_METRICS[selectedMapMetric];
   const value=totals[selectedMapMetric],width=showMapNumbers?Math.max(cluster?48:32,fmt.format(value).length*8+18):(cluster?24:10);
   const height=showMapNumbers?(cluster?48:34):(cluster?24:10);
   const label=showMapNumbers?`${metric.label} ${fmt.format(value)} ${metric.unit}`:`พิกัด${metric.label} (ซ่อนตัวเลข)`;
   const content=showMapNumbers?`<strong>${fmt.format(value)}</strong><small>${metric.unit}</small>`:'';
-  return L.divIcon({className:'map-value-icon',html:`<div class="map-value-badge ${cluster?'is-cluster':''}" style="--point-color:${value===0?'#64748b':metric.color}" title="${label}">${content}</div>`,iconSize:[width,height],iconAnchor:[width/2,height/2]});
+  return L.divIcon({className:'map-value-icon',html:`<div class="map-value-badge ${cluster?'is-cluster':''}" style="--point-color:${mapDensityColor(value, mapDensityMaximum)}" title="${label}">${content}</div>`,iconSize:[width,height],iconAnchor:[width/2,height/2]});
 }
 
 function updateMapPointMetric(value) {
   selectedMapMetric=MAP_POINT_METRICS[value]?value:'fatalities';
-  for(const marker of mapIncidentMarkers)marker.setIcon(mapPointIcon([marker.options.accidentRecord]));
-  pointLayer?.refreshClusters?.();
+  refreshMapDensity();
+  boundaryLayer?.setStyle(getProvinceStyle);
   const metric=MAP_POINT_METRICS[selectedMapMetric];
-  setText('map-point-metric-note',showMapNumbers?`ตัวเลขบนจุดและกลุ่มจุด = ${metric.label} (${metric.unit}) ตามตัวกรอง${selectedMapMetric==='injuries'?' · รวมบาดเจ็บสาหัสและเล็กน้อย':''} · 0 หมายถึงไม่มีผู้สูญเสียประเภทที่เลือกในจุดนั้น`:`ซ่อนตัวเลขบนจุดแล้ว · ยังคงแสดงพิกัดและกลุ่มจุด คลิกเพื่อดูรายละเอียดได้`);
+  const visible = document.getElementById('show-points')?.checked ?? true;
+  setText('map-point-metric-note', `${metric.label} (ราย)${selectedMapMetric === 'injuries' ? ' รวมบาดเจ็บสาหัสและเล็กน้อย' : ''} · ${!visible ? 'ซ่อนจุดแล้ว' : showMapNumbers ? 'ตัวเลขบนจุด/กลุ่มจุดเป็นยอดคนรวม ไม่ใช่จำนวนเหตุการณ์' : 'ซ่อนตัวเลขบนจุดแล้ว'} · สีไล่ระดับเขียว → ส้ม → แดง ตามจำนวนคนที่เลือก · สีจุดเทียบกับจุด/กลุ่มจุดที่มียอดสูงสุดในระดับซูมปัจจุบัน · สีจังหวัดเทียบยอดจังหวัดสูงสุดตามตัวกรอง`);
+
 }
 
 /* Utility Helpers */
@@ -396,8 +427,8 @@ function updateFilterStatusBar(records, roads) {
     chipsContainer.append(c);
   }
 
-  const totalDeaths = records.reduce((s, r) => s + (Number(r.fatalities) || 0), 0);
-  countsEl.textContent = `${fmt.format(records.length)} เหตุการณ์ (${fmt.format(totalDeaths)} เสียชีวิต) · ${fmt.format(roads.length)} ช่วงสายทาง`;
+  const totals = summarizeMapPoints(records);
+  countsEl.textContent = `ผู้บาดเจ็บ ${fmt.format(totals.injuries)} ราย · ผู้เสียชีวิต ${fmt.format(totals.fatalities)} ราย · ${fmt.format(roads.length)} ช่วงสายทาง`;
 }
 
 /* Sync Filter Dropdowns */
@@ -475,10 +506,10 @@ function getProvinceStyle(feature) {
   const pname = feature.properties?.pro_th;
   const reg = feature.properties?.reg_th;
   const isDark = document.body.dataset.theme === 'dark';
-  const maxCount = Math.max(1, ...provinceFatalityCounts.values());
-  const value = provinceFatalityCounts.get(pname) || 0;
-  const ratio = value / maxCount;
-  const choropleth = value === 0 ? '#2E7D32' : ratio >= .75 ? '#A91B18' : ratio >= .45 ? '#FF8C00' : ratio >= .2 ? '#FFD700' : '#2E7D32';
+  const counts = selectedProvinceCounts();
+  const maxCount = Math.max(1, ...counts.values());
+  const value = counts.get(pname) || 0;
+  const choropleth = mapDensityColor(value, maxCount);
 
   // Selected Province
   if (selectedProvince !== 'all') {
@@ -532,7 +563,7 @@ function getProvinceStyle(feature) {
     };
   }
 
-  // Country-level choropleth based on the currently filtered event counts.
+  // Country-level choropleth based on the selected casualty metric.
   return {
     color: isDark ? '#CEE7F3' : '#fff',
     weight: 0.7,
@@ -644,11 +675,11 @@ function drawMap(fitBounds = false) {
 
   const records = getFilteredRecords();
   provinceFatalityCounts = new Map();
-  provinceEventCounts = new Map();
+  provinceInjuryCounts = new Map();
   for (const record of records) {
     const province = record.province || 'ไม่ระบุ';
     provinceFatalityCounts.set(province, (provinceFatalityCounts.get(province) || 0) + (Number(record.fatalities) || 0));
-    provinceEventCounts.set(province, (provinceEventCounts.get(province) || 0) + 1);
+    provinceInjuryCounts.set(province, (provinceInjuryCounts.get(province) || 0) + Math.max(0, Number(record.injuries) || 0));
   }
   const roads = getFilteredRoads();
 
@@ -756,6 +787,8 @@ function drawMap(fitBounds = false) {
     else markers.forEach(marker => pointLayer.addLayer(marker));
   }
 
+  refreshMapDensity();
+
   // 5. Empty State & Summary Check
   const emptyEl = document.getElementById('map-empty');
   const emptyDescEl = document.getElementById('map-empty-desc');
@@ -775,9 +808,9 @@ function drawMap(fitBounds = false) {
   const summaryEl = document.getElementById('map-summary');
   if (summaryEl) {
     const validCoords = records.filter(r => isValue(r.latitude) && isValue(r.longitude)).length;
-    const totalDeaths = records.reduce((s, r) => s + (Number(r.fatalities) || 0), 0);
+    const totals = summarizeMapPoints(records);
     const ruralCount = roads.filter(road => roadClassification(road) === 'rural').length;
-    summaryEl.textContent = `แสดง ${fmt.format(validCoords)} เหตุการณ์มีพิกัด (${fmt.format(totalDeaths)} ผู้เสียชีวิต) · ทางหลวงแผ่นดิน ${fmt.format(roads.length-ruralCount)} ช่วง · ทางหลวงชนบท ${fmt.format(ruralCount)} ช่วง (ทุกเส้นในชุดข้อมูลที่เปิดเผย)`;
+    summaryEl.textContent = `ผู้บาดเจ็บ ${fmt.format(totals.injuries)} ราย · ผู้เสียชีวิต ${fmt.format(totals.fatalities)} ราย · ทางหลวงแผ่นดิน ${fmt.format(roads.length-ruralCount)} ช่วง · ทางหลวงชนบท ${fmt.format(ruralCount)} ช่วง (ทุกเส้นในชุดข้อมูลที่เปิดเผย)`;
   }
 
   // 7. Dynamic Viewport Zooming
@@ -932,7 +965,7 @@ function setupMap() {
       const pname = feature.properties?.pro_th;
       const reg = feature.properties?.reg_th;
       
-      layer.bindTooltip(() => `<strong>${escapeHtml(pname)}</strong> (${escapeHtml(reg)})<br>${fmt.format(provinceFatalityCounts.get(pname)||0)} ผู้เสียชีวิต · ${fmt.format(provinceEventCounts.get(pname)||0)} เหตุการณ์`, {
+      layer.bindTooltip(() => `<strong>${escapeHtml(pname)}</strong> (${escapeHtml(reg)})<br>${MAP_POINT_METRICS[selectedMapMetric].label} ${fmt.format(selectedProvinceCounts().get(pname)||0)} ราย`, {
         sticky: true,
         direction: 'top',
         className: 'province-tooltip'
@@ -959,6 +992,7 @@ function setupMap() {
   pointLayer = hasMarkerCluster
     ? L.markerClusterGroup({
         chunkedLoading: true,
+        chunkProgress: (processed, total) => { if (processed === total) refreshMapDensity(); },
         showCoverageOnHover: false,
         spiderfyOnMaxZoom: true,
         maxClusterRadius: 40,
@@ -966,10 +1000,12 @@ function setupMap() {
       })
     : L.layerGroup();
   pointLayer.addTo(leafletMap);
+  leafletMap.on('zoomend', refreshMapDensity);
+  pointLayer.on?.('animationend', refreshMapDensity);
 
   // Listeners for UI toggles
   document.getElementById('show-roads')?.addEventListener('change', () => drawMap(false));
-  document.getElementById('show-points')?.addEventListener('change', () => drawMap(false));
+  document.getElementById('show-points')?.addEventListener('change', () => { drawMap(false); updateMapPointMetric(selectedMapMetric); });
   document.getElementById('show-boundary')?.addEventListener('change', () => drawMap(false));
   document.getElementById('map-point-metric')?.addEventListener('change',e=>updateMapPointMetric(e.target.value));
   document.getElementById('show-map-numbers')?.addEventListener('change',e=>{showMapNumbers=e.target.checked;updateMapPointMetric(selectedMapMetric);});
