@@ -1,3 +1,4 @@
 .spatial_deps/
 __pycache__/
 *.pyc
+sites/

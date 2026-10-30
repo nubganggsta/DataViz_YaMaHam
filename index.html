@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.4/dist/MarkerCluster.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.4/dist/MarkerCluster.Default.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body data-theme="light">
@@ -249,9 +249,14 @@
               </select>
             </div>
 
+            <div class="filter-control-item">
+              <label for="map-point-metric">ข้อมูลความสูญเสียบนแผนที่</label>
+              <select id="map-point-metric"><option value="fatalities">ผู้เสียชีวิต (ราย)</option><option value="injuries">ผู้บาดเจ็บรวม (ราย)</option></select>
+            </div>
             <div class="map-layer-toggles">
+              <label><input type="checkbox" id="show-map-numbers" checked> แสดงตัวเลขบนจุด</label>
               <label><input type="checkbox" id="show-roads" checked> ทางหลวงแผ่นดินและทางหลวงชนบท</label>
-              <label><input type="checkbox" id="show-points" checked> พิกัดอุบัติเหตุ</label>
+              <label><input type="checkbox" id="show-points" checked> แสดงจุดบนแผนที่</label>
               <label><input type="checkbox" id="show-boundary" checked> ขอบเขตพื้นที่</label>
             </div>
 
@@ -265,6 +270,7 @@
           </div>
         </div>
 
+        <p class="chart-footnote" id="map-point-metric-note" aria-live="polite">ตัวเลขบนจุดและกลุ่มจุด = ผู้เสียชีวิต (ราย) ตามตัวกรอง · เปิด–ปิดตัวเลขได้</p>
         <!-- Filter Status Bar -->
         <div class="filter-status-bar" id="filter-status-bar">
           <div class="active-chips" id="active-chips"></div>
@@ -291,13 +297,10 @@
               <span class="legend-item"><i class="legend-line line-pink"></i> ทางหลวง 3 หลัก</span>
               <span class="legend-item"><i class="legend-line" style="background:#6b7280"></i> ทางหลวง 4 หลัก / อื่น ๆ</span>
               <span class="legend-item"><i class="legend-line" style="background:#2391FF"></i> ทางหลวงชนบท</span>
-              <span class="legend-item"><i class="map-dot map-dot-fatal"></i> เหตุการณ์มีผู้เสียชีวิต</span>
-              <span class="legend-item"><i class="map-dot map-dot-accident"></i> เหตุการณ์ไม่มีผู้เสียชีวิต</span>
-              <span class="legend-item"><i class="boundary-legend"></i> ขอบเขตจังหวัด / ภาค</span>
-              <span class="legend-item"><i class="choropleth-swatch" style="background:#A91B18"></i> สูงมาก</span>
-              <span class="legend-item"><i class="choropleth-swatch" style="background:#FF8C00"></i> สูง</span>
-              <span class="legend-item"><i class="choropleth-swatch" style="background:#FFD700"></i> ปานกลาง</span>
-              <span class="legend-item"><i class="choropleth-swatch" style="background:#2E7D32"></i> ต่ำ / ไม่มีเหตุการณ์</span>
+              <span class="legend-item"><i class="map-dot" style="background:#2E7D32"></i> ความหนาแน่นน้อย</span>
+              <span class="legend-item"><i class="map-dot" style="background:#FF8C00"></i> ความหนาแน่นปานกลาง</span>
+              <span class="legend-item"><i class="map-dot" style="background:#C1121F"></i> ความหนาแน่นมาก</span>
+              <span class="legend-item"><i class="boundary-legend"></i> สีไล่ตามจำนวนผู้บาดเจ็บหรือผู้เสียชีวิตที่เลือก</span>
             </div>
           </div>
         </div>
@@ -450,8 +453,8 @@
 
   <!-- Scripts -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.4/dist/leaflet.markercluster.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="overview-analytics.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=20261030-density-2"></script>
 </body>
 </html>
